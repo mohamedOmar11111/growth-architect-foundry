@@ -47,7 +47,7 @@ def check(name: str, fn) -> None:
 def run(cmd: list[str], cwd: Path) -> subprocess.CompletedProcess:
     # Force UTF-8 both ways: the report command writes Arabic, and a Windows
     # pipe defaults to a legacy codepage that can't encode it.
-    env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8", "FOUNDRY_WORKSPACE": str(REPO_ROOT)}
     return subprocess.run(
         cmd, cwd=cwd, capture_output=True, text=True, timeout=60,
         encoding="utf-8", errors="replace", env=env,
@@ -244,7 +244,7 @@ def check_creative_brief_requires_key() -> tuple[bool, str]:
     }
     result = subprocess.run(
         [sys.executable, "-c", code], cwd=ENGINE_DIR, capture_output=True,
-        text=True, timeout=30, env=scrubbed_env,
+        text=True, timeout=30, env={**scrubbed_env, "FOUNDRY_WORKSPACE": str(REPO_ROOT)},
     )
     return result.returncode == 0, _tail_lines(result.stderr) if result.returncode else result.stdout.strip()
 
@@ -279,11 +279,6 @@ def check_foundry_cli() -> tuple[bool, str]:
          ["Seasonal Plan"]),
         (["foundry.py", "tenants", "list"],
          ["Tenants"]),
-        # Live read commands must fail gracefully without real credentials
-        (["foundry.py", "live", "pull", "--client", "Aurora_Skincare"],
-         ["no campaigns found"]),
-        (["foundry.py", "live", "optimize", "--client", "Aurora_Skincare"],
-         ["no campaigns"]),
     ]
     for cmd, markers in runs:
         result = run([sys.executable, *cmd], REPO_ROOT)
@@ -292,6 +287,12 @@ def check_foundry_cli() -> tuple[bool, str]:
         missing = [m for m in markers if m not in result.stdout]
         if missing:
             return False, f"'{' '.join(cmd)}' is missing markers: {missing}"
+    # Live read commands with placeholder credentials must FAIL LOUD (non-zero,
+    # FETCH FAILED) — never report a failed pull as an empty account.
+    for verb in ("pull", "optimize"):
+        result = run([sys.executable, "foundry.py", "live", verb, "--client", "Aurora_Skincare"], REPO_ROOT)
+        if result.returncode == 0 or not ("FETCH FAILED" in result.stderr or "no ad platform configured" in result.stderr):
+            return False, f"live {verb} with placeholder creds should exit non-zero (FETCH FAILED or not configured); got rc={result.returncode}"
     return True, "foundry CLI dispatches all groups correctly"
 
 
@@ -383,7 +384,7 @@ def cleanup() -> None:
     # Restore tracked files — only works in a git repo (skip gracefully otherwise)
     try:
         subprocess.run(
-            ["git", "checkout", "--", str(DEMO_SIGNAL.relative_to(REPO_ROOT)), "hq.db"],
+            ["git", "checkout", "--", str(DEMO_SIGNAL.relative_to(REPO_ROOT))],
             cwd=REPO_ROOT, capture_output=True, timeout=10,
         )
     except (FileNotFoundError, subprocess.TimeoutExpired):

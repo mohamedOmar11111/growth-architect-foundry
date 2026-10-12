@@ -30,7 +30,8 @@ import requests
 from root_bus import read_signals, mark_signal_linked, write_task, append_root_log, get_operator_name
 from telegram import send_message, TelegramConfigError
 
-DOMAIN_ROOT = Path(__file__).resolve().parents[2].parent / "domain" / "lead-qualify"
+from paths import DOMAIN_WORKSPACE  # noqa: E402
+DOMAIN_ROOT = DOMAIN_WORKSPACE / "lead-qualify"
 DRAFTS_DIR = DOMAIN_ROOT / "drafts"
 STATE_PATH = DOMAIN_ROOT / "STATE.md"
 

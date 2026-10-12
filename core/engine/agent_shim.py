@@ -63,10 +63,7 @@ from dotenv import dotenv_values
 
 from tenant import TenantContext, TenantConfigError
 
-HQ_ROOT = Path(__file__).resolve().parents[2]
-DOMAIN_ROOT = HQ_ROOT / "domain"
-CLIENTS_ROOT = HQ_ROOT / "02_Active_Clients"
-LOG_PATH = HQ_ROOT / "log.md"
+from paths import WORKSPACE as HQ_ROOT, CLIENTS_ROOT, LOG_PATH, DOMAIN_CONTRACTS, DOMAIN_WORKSPACE  # noqa: E402
 
 VALID_LOOPS = {
     "command-chase", "grow-edge-sessions", "ad-intel", "content-engine", "lead-qualify",
@@ -116,7 +113,7 @@ def build_context(loop: str, client: str | None) -> str:
     """Assembles the same read-before-acting bundle AGENTS.md Section 0
     prescribes for any agent — this script follows its own kernel's rules
     instead of being a special case."""
-    domain_readme = DOMAIN_ROOT / loop / "README.md"
+    domain_readme = DOMAIN_CONTRACTS / loop / "README.md"
     if not domain_readme.exists():
         raise AgentShimError(
             f"No domain contract at {domain_readme} — every loop must have one "
@@ -284,7 +281,7 @@ def run(loop: str, client: str | None, task: str) -> int:
     call_fn = PROVIDERS[provider][1]
     result = call_fn(api_key, system_prompt, task)
 
-    drafts_dir = DOMAIN_ROOT / loop / "drafts"
+    drafts_dir = DOMAIN_WORKSPACE / loop / "drafts"
     drafts_dir.mkdir(parents=True, exist_ok=True)
     now = datetime.datetime.now()
     draft_path = drafts_dir / f"{now.strftime('%Y-%m-%d-%H%M')}-agent-shim-{provider}.md"

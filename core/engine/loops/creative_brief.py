@@ -35,8 +35,8 @@ from tasks import write_task
 from utils import append_log
 from agent_shim import resolve_provider, _load_root_env, PROVIDERS, AgentShimError
 
-HQ_ROOT = Path(__file__).resolve().parents[2].parent  # matches lead_qualify.py's DOMAIN_ROOT convention for files under loops/
-IMAGE_PROMPT_AGENT = HQ_ROOT / "01_Context_Vault" / "Agents" / "design" / "design-image-prompt-engineer.md"
+from paths import ENGINE_ROOT  # noqa: E402
+IMAGE_PROMPT_AGENT = ENGINE_ROOT / "01_Context_Vault" / "Agents" / "design" / "design-image-prompt-engineer.md"
 VISUAL_MARKER = "<!-- visual-brief-generated -->"
 
 
