@@ -148,3 +148,19 @@ python foundry.py account audit --client Aurora_Skincare
 - Seasonal dates shift ~10 days/year (lunar calendar) — verify before committing budget
 - Every projection is an estimate. Nothing here is a guarantee
 - This is not legal, tax, or financial advice
+
+## Content Vault
+
+Ready-to-use content organized by type. All assets follow the `templates/ASSET_TEMPLATE.md` format.
+
+| Type | Path | Contents |
+|---|---|---|
+| Templates | `templates/` | ASSET_TEMPLATE, CASE_STUDY_TEMPLATE, EXPERIMENT_LOG_TEMPLATE |
+| Playbooks | `playbooks/` | Launch (7-day onboarding), Funnel (ladder diagnosis), COD Operations |
+| Frameworks | `frameworks/` | COD Profit Funnel, Bilingual Content System |
+| Benchmarks | `benchmarks/` | MENA e-com benchmarks (sourced, cited) |
+| Swipe Files | `swipe-files/` | 20 hooks (EN+AR), CTAs, WhatsApp scripts |
+| Worked Examples | `worked-examples/` | COD ROAS diagnosis, Signal-to-content pipeline |
+| Prompts | `prompts/` | Account audit, Creative brief, Ad copy (MENA bilingual) |
+
+Every benchmark number is sourced. Every worked example is labeled fictional. Every prompt has an "honest limits" section.

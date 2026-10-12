@@ -45,3 +45,12 @@ Standalone: `python foundry.py account audit --client Aurora_Skincare`
 
 ## Agents (67)
 Full roster in [01_Context_Vault/Agents/](01_Context_Vault/Agents/) — marketing, engineering, design, product, testing, support, and specialized squads including the social media team.
+
+## Content Vault
+- [Templates](templates/) — ASSET_TEMPLATE, CASE_STUDY_TEMPLATE, EXPERIMENT_LOG_TEMPLATE
+- [Playbooks](playbooks/) — Launch (7-day onboarding), Funnel (ladder diagnosis), COD Operations
+- [Frameworks](frameworks/) — COD Profit Funnel, Bilingual Content System
+- [Benchmarks](benchmarks/) — MENA e-commerce benchmarks (sourced, cited, MENA-specific)
+- [Swipe Files](swipe-files/) — 20 hooks (EN+AR), CTAs, WhatsApp scripts
+- [Worked Examples](worked-examples/) — COD ROAS diagnosis, Signal-to-content pipeline
+- [Prompts](prompts/) — Account audit, Creative brief, Ad copy (MENA bilingual)
