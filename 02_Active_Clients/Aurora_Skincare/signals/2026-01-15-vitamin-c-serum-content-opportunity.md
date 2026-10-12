@@ -7,7 +7,7 @@ loop: ad-intel
 type: content-idea
 priority: medium
 action-needed: true
-linked-task: 2026-10-12-content-engine-campaign-vitamin-c-serum-exact-match-is-converting-attention.md
+linked-task: none
 ---
 
 ## Summary
