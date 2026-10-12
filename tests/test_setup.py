@@ -46,3 +46,12 @@ def test_doctor_reports_ok_and_lists_tenants(tmp_path, setup_mod, capsys):
     assert setup_mod.cmd_doctor({}) == 0
     out = capsys.readouterr().out
     assert "Acme" in out and "python-dotenv" in out
+
+
+def test_init_env_file_is_owner_only_on_posix(tmp_path, setup_mod):
+    import os
+    import stat
+    setup_mod.cmd_init({"client": "Acme"})
+    mode = stat.S_IMODE((tmp_path / "02_Active_Clients" / "Acme" / ".env").stat().st_mode)
+    if os.name == "posix":
+        assert mode == 0o600

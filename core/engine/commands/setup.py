@@ -11,6 +11,7 @@ so plugin updates cannot touch your client data.
 from __future__ import annotations
 
 import importlib.util
+import os
 import re
 import shutil
 import sys
@@ -27,6 +28,15 @@ DEPENDENCIES = (
     ("requests", "requests", "Meta Ads + LLM shim"),
     ("google.ads.googleads", "google-ads", "Google Ads live operations (optional)"),
 )
+
+
+def _write_private(path, text: str) -> None:
+    """Create a credentials file owner-read/write only (0o600) from the start,
+    so there is no window where it is group/world readable. (No-op for the
+    mode bits on Windows, where ACLs apply instead.)"""
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(text)
 
 
 def cmd_init(opts: dict) -> int:
@@ -46,7 +56,7 @@ def cmd_init(opts: dict) -> int:
 
     shutil.copytree(TEMPLATE_TENANT, target, ignore=shutil.ignore_patterns("signals", ".env"))
     (target / "signals").mkdir()
-    shutil.copyfile(target / ".env.example", target / ".env")
+    _write_private(target / ".env", (target / ".env.example").read_text(encoding="utf-8"))
 
     print(f"Created tenant '{name}' in {target}\n")
     print("Next:")
