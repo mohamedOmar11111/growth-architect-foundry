@@ -11,15 +11,14 @@ import datetime
 import subprocess
 from pathlib import Path
 
-HQ_ROOT = Path(__file__).resolve().parents[2]
-LOG_PATH = HQ_ROOT / "log.md"
+from paths import WORKSPACE, LOG_PATH
 
 
 def append_log(tenant_name: str, loop_name: str, summary: str, report_path: Path) -> None:
     """Appends one entry to the root log.md — the operator's global
     cross-business run log, unchanged from the pre-Growth-Engine convention."""
     now = datetime.datetime.now()
-    rel = report_path.relative_to(HQ_ROOT).as_posix()
+    rel = report_path.relative_to(WORKSPACE).as_posix()
     entry = (
         f"\n## {now.strftime('%Y-%m-%d %H:%M')} — {tenant_name} / {loop_name} (Growth Engine)\n"
         f"- {summary}. Report: `{rel}`\n"

@@ -15,21 +15,40 @@ maker/checker safety, Arabic-first output.
 
 ```
 /plugin marketplace add mohamedOmar11111/growth-architect-foundry
-/plugin install growth-architect-foundry@growth-architect-foundry
+/plugin install foundry@growth-architect-foundry
 ```
 
-After install, Claude Code knows every command — just say "audit my account"
-or "راجع حسابي" in plain English or Arabic.
+Then, in **your own project folder** (this is your workspace: tenants, `log.md`,
+signals and tasks live here, never inside the plugin, so updates can't touch
+client data):
+
+```
+/foundry:doctor              # checks Python + dependencies, prints the fix commands
+/foundry:init Acme_Store     # scaffolds 02_Active_Clients/Acme_Store/
+/foundry:audit Acme_Store    # 0-100 health score, top fixes, 30-day plan
+```
+
+Requirements: Python 3.10+ and `pip install -r requirements.txt` (Google Ads SDK
+is optional). Or just talk to Claude: "audit my account" / "راجع حسابي".
+
+Slash commands: `/foundry:init`, `doctor`, `audit`, `diagnose`, `report`, `live`.
+The full 23+ command surface is available through the skill.
 
 **Other interfaces:**
 
 | You have | Use |
 |---|---|
-| Claude Code | Plugin install above — no setup |
+| Claude Code | Plugin install above |
 | Cursor | `.cursor/rules/growth-architect-kernel.mdc` — already wired in |
-| ChatGPT | `docs/CHATGPT_SETUP.md` — Custom GPT or plain conversation |
-| Terminal | `python foundry.py account audit --client Aurora_Skincare` |
+| Terminal | `python foundry.py account audit --client Aurora_Skincare` (run from your workspace, or set `FOUNDRY_WORKSPACE`) |
 | Just an API key | `python core/engine/agent_shim.py content-engine --task "..."` |
+
+### Live ad-account safety
+
+- Failed API calls are reported as **FETCH FAILED** and exit non-zero, never as "no campaigns".
+- Writes (`live pause`, `live budget`) need `--confirm`, are refused if any platform fetch failed,
+  and budget changes are capped at **20% cumulative per campaign per 7 days** (ledger in the tenant's `04_Reports/`).
+- Agency accounts: set `GOOGLE_ADS_LOGIN_CUSTOMER_ID` (manager account) in the tenant `.env`.
 
 ---
 
@@ -78,7 +97,7 @@ or "راجع حسابي" in plain English or Arabic.
 
 ## How to Verify It Actually Works
 
-`python scripts/smoke_test.py` is a one-command, self-cleaning test that:
+`python -m pytest tests` runs unit tests for the money-moving paths (mocked SDK/HTTP). `python scripts/smoke_test.py` is a one-command, self-cleaning test that:
 - Seeds the kernel and verifies the squad roster
 - Confirms every engine module imports cleanly
 - Re-checks the path-traversal security fix

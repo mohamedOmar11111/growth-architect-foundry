@@ -1,0 +1,15 @@
+{
+  "name": "growth-architect-foundry",
+  "owner": { "name": "Mohamed Omar", "url": "https://github.com/mohamedOmar11111" },
+  "metadata": { "description": "Growth Architect Foundry: the agency growth kernel as a Claude Code plugin." },
+  "plugins": [
+    {
+      "name": "foundry",
+      "source": "./",
+      "description": "Deterministic growth commands for agencies: audit, diagnose, report, media math, live Google/Meta ops with safety gates.",
+      "version": "1.1.0",
+      "category": "marketing",
+      "keywords": ["ads", "agency", "google-ads", "meta-ads"]
+    }
+  ]
+}

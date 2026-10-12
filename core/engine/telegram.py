@@ -16,7 +16,7 @@ from pathlib import Path
 import requests
 from dotenv import dotenv_values
 
-HQ_ROOT = Path(__file__).resolve().parents[2]
+from paths import WORKSPACE as HQ_ROOT
 NOTIFICATIONS_CONFIG = HQ_ROOT / "05_System_Configs" / "notifications.json"
 
 

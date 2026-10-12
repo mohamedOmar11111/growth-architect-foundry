@@ -56,7 +56,11 @@ If basics missing → one-message intake.
 
 ## Commands
 
-All commands run via `python foundry.py <group> <verb> [--client <tenant>]`.
+All commands run via `python "${CLAUDE_PLUGIN_ROOT}/foundry.py" <group> <verb> [--client <tenant>]` (when running from a clone, `python foundry.py ...`).
+
+**Workspace:** run from the user's own project folder (or set `FOUNDRY_WORKSPACE`). Tenants, `log.md`, `signals/` and `tasks/` live THERE, never in the plugin folder. First time: `setup doctor`, then `setup init --client <Name>`.
+
+**Failure rule:** a `FETCH FAILED` line from `live` means the API call failed — never describe it as "no campaigns". Writes (`pause`, `budget`) need explicit user approval of the exact change, then `--confirm`. Budget changes are capped at 20% cumulative per campaign per 7 days.
 Reports write to `04_Reports/` and append to `log.md`.
 
 ### Account (deterministic, no LLM)

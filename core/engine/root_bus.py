@@ -22,11 +22,7 @@ from typing import Any
 import yaml
 from dotenv import dotenv_values
 
-HQ_ROOT = Path(__file__).resolve().parents[2]
-SIGNALS_DIR = HQ_ROOT / "signals"
-TASKS_DIR = HQ_ROOT / "tasks"
-LOG_PATH = HQ_ROOT / "log.md"
-CLIENTS_ROOT = HQ_ROOT / "02_Active_Clients"
+from paths import WORKSPACE as HQ_ROOT, SIGNALS_DIR, TASKS_DIR, LOG_PATH, CLIENTS_ROOT
 
 VALID_SOURCES = {"gmail", "whatsapp", "internal", "client-report", "ads-platform", "manual"}
 VALID_LOOPS = {

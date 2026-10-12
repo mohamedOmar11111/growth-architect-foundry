@@ -5,15 +5,17 @@ APIs. Every other command reads from files on disk — this one reads from
 (and writes to) live ad accounts.
 
 Safety model (non-negotiable):
-  - READ verbs (pull, optimize): same as every command — fail loud if creds
-    missing, never modify anything.
-  - WRITE verbs (pause, budget): require --confirm flag. The exact change is
-    printed BEFORE the write happens. No --confirm = no write, full stop.
-    Budget changes capped at 20% per action (rule 3: respect learning).
+  - READ verbs (pull, optimize): fail loud if a configured platform's API call
+    fails — a failed pull is NEVER reported as "no campaigns". Never modify.
+  - WRITE verbs (pause, budget): require --confirm. The exact change is printed
+    BEFORE the write happens. No --confirm = no write, full stop. A write is
+    refused outright if any platform's fetch failed (stale/partial state).
+  - Budget changes are capped at 20% CUMULATIVE per campaign over a rolling
+    7-day window (ledger in the tenant's 04_Reports/), so repeated small
+    steps cannot compound past the learning-phase guardrail.
 
-Platform support: Google Ads (via google-ads SDK, same as ad_intel.py) and
-Meta (via raw REST, same as meta_ads.py). New platforms added by adding a
-fetcher + mutator pair, not by changing the command logic.
+Platform support: Google Ads (google-ads SDK; MCC via GOOGLE_ADS_LOGIN_CUSTOMER_ID)
+and Meta (raw REST). New platforms: add a fetcher + mutator pair.
 """
 
 from __future__ import annotations
@@ -21,32 +23,46 @@ from __future__ import annotations
 import datetime
 import json
 import sys
+from pathlib import Path
 from typing import Any
 
 from tenant import TenantContext, TenantConfigError
 from utils import append_log
 
-# ── Google Ads integration (reuses ad_intel.py patterns) ────────────────────
+GRAPH_API_VERSION = "v21.0"
+MAX_BUDGET_CHANGE_PCT = 0.20  # rule 3: respect learning
+BUDGET_WINDOW_DAYS = 7
+LEDGER_NAME = "budget-ledger.json"
 
-def _google_fetch_campaigns(tenant: TenantContext) -> dict[str, dict]:
-    """Pull live Google Ads campaign data. Returns empty dict if creds missing."""
+GOOGLE_KEYS = ("GOOGLE_ADS_CLIENT_ID", "GOOGLE_ADS_CLIENT_SECRET",
+               "GOOGLE_ADS_REFRESH_TOKEN", "GOOGLE_ADS_DEVELOPER_TOKEN",
+               "GOOGLE_ADS_CUSTOMER_ID")
+META_KEYS = ("META_ACCESS_TOKEN", "META_AD_ACCOUNT_ID")
+
+
+class LiveFetchError(RuntimeError):
+    """A configured platform's API call failed. Distinct from 'not configured'
+    and from 'configured but genuinely has zero campaigns'."""
+
+
+def _is_configured(tenant: TenantContext, keys: tuple[str, ...]) -> bool:
     try:
-        tenant.require(
-            "GOOGLE_ADS_CLIENT_ID", "GOOGLE_ADS_CLIENT_SECRET",
-            "GOOGLE_ADS_REFRESH_TOKEN", "GOOGLE_ADS_DEVELOPER_TOKEN",
-            "GOOGLE_ADS_CUSTOMER_ID",
-        )
+        tenant.require(*keys)
+        return True
     except TenantConfigError:
-        return {}
+        return False
 
+
+# ── Google Ads ──────────────────────────────────────────────────────────────
+
+def _google_client(tenant: TenantContext):
+    """Build a Google Ads client. Raises LiveFetchError if the SDK is missing
+    or the credentials are rejected by the SDK."""
     try:
         from google.ads.googleads.client import GoogleAdsClient
-        from google.ads.googleads.errors import GoogleAdsException
-    except ImportError:
-        print("WARNING: google-ads SDK not installed — skipping Google Ads pull.",
-              file=sys.stderr)
-        return {}
-
+    except ImportError as exc:
+        raise LiveFetchError(
+            "google-ads SDK not installed — run: pip install google-ads") from exc
     config = {
         "client_id": tenant.env["GOOGLE_ADS_CLIENT_ID"],
         "client_secret": tenant.env["GOOGLE_ADS_CLIENT_SECRET"],
@@ -54,19 +70,34 @@ def _google_fetch_campaigns(tenant: TenantContext) -> dict[str, dict]:
         "developer_token": tenant.env["GOOGLE_ADS_DEVELOPER_TOKEN"],
         "use_proto_plus": True,
     }
+    login = tenant.env.get("GOOGLE_ADS_LOGIN_CUSTOMER_ID")  # agency MCC
+    if login:
+        config["login_customer_id"] = login.replace("-", "")
     try:
-        client = GoogleAdsClient.load_from_dict(config)
-    except Exception as e:
-        print(f"WARNING: Google Ads client init failed (likely placeholder creds): {e}",
-              file=sys.stderr)
-        return {}
+        return GoogleAdsClient.load_from_dict(config)
+    except (ValueError, KeyError, *_google_errors()) as exc:
+        raise LiveFetchError(f"Google Ads client init failed: {exc}") from exc
 
-    customer_id = tenant.env["GOOGLE_ADS_CUSTOMER_ID"]
+
+def _google_errors() -> tuple[type[Exception], ...]:
+    """API errors AND auth errors (bad/revoked OAuth client or token raise
+    GoogleAuthError, not GoogleAdsException)."""
+    from google.ads.googleads.errors import GoogleAdsException
+    from google.auth.exceptions import GoogleAuthError
+    return (GoogleAdsException, GoogleAuthError)
+
+
+def _google_customer_id(tenant: TenantContext) -> str:
+    return tenant.env["GOOGLE_ADS_CUSTOMER_ID"].replace("-", "")
+
+
+def _google_fetch_campaigns(tenant: TenantContext) -> dict[str, dict]:
+    """Pull live Google Ads campaigns. Raises LiveFetchError on any failure."""
+    client = _google_client(tenant)
     ga_service = client.get_service("GoogleAdsService")
-
     try:
         response = ga_service.search(
-            customer_id=customer_id,
+            customer_id=_google_customer_id(tenant),
             query="""
                 SELECT campaign.id, campaign.name, campaign.status,
                        campaign_budget.amount_micros,
@@ -78,229 +109,220 @@ def _google_fetch_campaigns(tenant: TenantContext) -> dict[str, dict]:
                   AND segments.date DURING LAST_7_DAYS
             """,
         )
-        campaigns: dict[str, dict] = {}
-        for row in response:
-            cid = str(row.campaign.id)
-            if cid not in campaigns:
-                campaigns[cid] = {
-                    "id": cid,
-                    "name": row.campaign.name,
-                    "status": row.campaign.status.name,
-                    "budget": row.campaign_budget.amount_micros / 1_000_000,
-                    "platform": "google",
-                    "impressions": 0, "clicks": 0, "cost": 0.0, "conversions": 0.0,
-                }
-            c = campaigns[cid]
-            c["impressions"] += row.metrics.impressions
-            c["clicks"] += row.metrics.clicks
-            c["cost"] += row.metrics.cost_micros / 1_000_000
-            c["conversions"] += row.metrics.conversions
-        for c in campaigns.values():
-            c["ctr"] = (c["clicks"] / c["impressions"] * 100) if c["impressions"] else 0.0
-            c["cpa"] = (c["cost"] / c["conversions"]) if c["conversions"] else None
-        return campaigns
-    except GoogleAdsException as e:
-        print(f"WARNING: Google Ads API error: {e}", file=sys.stderr)
-        return {}
+        rows = list(response)
+    except _google_errors() as exc:
+        raise LiveFetchError(f"Google Ads API error: {exc}") from exc
+
+    campaigns: dict[str, dict] = {}
+    for row in rows:
+        cid = str(row.campaign.id)
+        if cid not in campaigns:
+            campaigns[cid] = {
+                "id": cid, "name": row.campaign.name,
+                "status": row.campaign.status.name,
+                "budget": row.campaign_budget.amount_micros / 1_000_000,
+                "platform": "google",
+                "impressions": 0, "clicks": 0, "cost": 0.0, "conversions": 0.0,
+            }
+        c = campaigns[cid]
+        c["impressions"] += row.metrics.impressions
+        c["clicks"] += row.metrics.clicks
+        c["cost"] += row.metrics.cost_micros / 1_000_000
+        c["conversions"] += row.metrics.conversions
+    return _finish_rates(campaigns)
 
 
 def _google_pause_campaign(tenant: TenantContext, campaign_id: str) -> tuple[bool, str]:
     """Pause a Google Ads campaign. Returns (success, message)."""
-    from google.ads.googleads.client import GoogleAdsClient
-
-    config = {
-        "client_id": tenant.env["GOOGLE_ADS_CLIENT_ID"],
-        "client_secret": tenant.env["GOOGLE_ADS_CLIENT_SECRET"],
-        "refresh_token": tenant.env["GOOGLE_ADS_REFRESH_TOKEN"],
-        "developer_token": tenant.env["GOOGLE_ADS_DEVELOPER_TOKEN"],
-        "use_proto_plus": True,
-    }
-    client = GoogleAdsClient.load_from_dict(config)
-    customer_id = tenant.env["GOOGLE_ADS_CUSTOMER_ID"]
-
+    client = _google_client(tenant)
+    customer_id = _google_customer_id(tenant)
     campaign_service = client.get_service("CampaignService")
-    campaign_operation = client.get_type("CampaignOperation")
-    campaign = campaign_operation.update
-    campaign.resource_name = campaign_service.campaign_path(customer_id, campaign_id)
-    campaign.status = client.enums.CampaignStatusEnum.PAUSED
-    field_mask = client.get_type("FieldMask")
-    field_mask.paths.append("status")
-    campaign_operation.update_mask.CopyFrom(field_mask)
-
+    operation = client.get_type("CampaignOperation")
+    operation.update.resource_name = campaign_service.campaign_path(customer_id, campaign_id)
+    operation.update.status = client.enums.CampaignStatusEnum.PAUSED
+    mask = client.get_type("FieldMask")
+    mask.paths.append("status")
+    operation.update_mask.CopyFrom(mask)
     try:
         response = campaign_service.mutate_campaigns(
-            customer_id=customer_id, operations=[campaign_operation],
-        )
-        return True, f"Google Ads campaign {campaign_id} paused: {response.results[0].resource_name}"
-    except Exception as e:
-        return False, f"Failed to pause Google Ads campaign {campaign_id}: {e}"
+            customer_id=customer_id, operations=[operation])
+    except _google_errors() as exc:
+        return False, f"Failed to pause Google Ads campaign {campaign_id}: {exc}"
+    return True, f"Google Ads campaign {campaign_id} paused: {response.results[0].resource_name}"
 
 
 def _google_update_budget(tenant: TenantContext, campaign_id: str,
                           new_budget: float) -> tuple[bool, str]:
     """Update a Google Ads campaign budget. Returns (success, message)."""
-    from google.ads.googleads.client import GoogleAdsClient
-
-    config = {
-        "client_id": tenant.env["GOOGLE_ADS_CLIENT_ID"],
-        "client_secret": tenant.env["GOOGLE_ADS_CLIENT_SECRET"],
-        "refresh_token": tenant.env["GOOGLE_ADS_REFRESH_TOKEN"],
-        "developer_token": tenant.env["GOOGLE_ADS_DEVELOPER_TOKEN"],
-        "use_proto_plus": True,
-    }
-    client = GoogleAdsClient.load_from_dict(config)
-    customer_id = tenant.env["GOOGLE_ADS_CUSTOMER_ID"]
-
-    # Get the campaign's budget resource name
+    client = _google_client(tenant)
+    customer_id = _google_customer_id(tenant)
     ga_service = client.get_service("GoogleAdsService")
-    response = ga_service.search(
-        customer_id=customer_id,
-        query=f"SELECT campaign.campaign_budget FROM campaign WHERE campaign.id = {campaign_id}",
-    )
-    budget_resource = None
-    for row in response:
-        budget_resource = row.campaign.campaign_budget
-        break
-    if not budget_resource:
+    try:
+        found = list(ga_service.search(
+            customer_id=customer_id,
+            query=("SELECT campaign.campaign_budget FROM campaign "
+                   f"WHERE campaign.id = {int(campaign_id)}"),
+        ))
+    except (*_google_errors(), ValueError) as exc:
+        return False, f"Could not look up campaign {campaign_id}: {exc}"
+    if not found or not found[0].campaign.campaign_budget:
         return False, f"Campaign {campaign_id} not found or has no budget."
 
     budget_service = client.get_service("CampaignBudgetService")
-    budget_operation = client.get_type("CampaignBudgetOperation")
-    budget_op = budget_operation.update
-    budget_op.resource_name = budget_resource
-    budget_op.amount_micros = int(new_budget * 1_000_000)
-    field_mask = client.get_type("FieldMask")
-    field_mask.paths.append("amount_micros")
-    budget_operation.update_mask.CopyFrom(field_mask)
-
+    operation = client.get_type("CampaignBudgetOperation")
+    operation.update.resource_name = found[0].campaign.campaign_budget
+    operation.update.amount_micros = int(new_budget * 1_000_000)
+    mask = client.get_type("FieldMask")
+    mask.paths.append("amount_micros")
+    operation.update_mask.CopyFrom(mask)
     try:
         result = budget_service.mutate_campaign_budgets(
-            customer_id=customer_id, operations=[budget_operation],
-        )
-        return True, f"Google Ads budget updated to {new_budget:.2f}: {result.results[0].resource_name}"
-    except Exception as e:
-        return False, f"Failed to update budget: {e}"
+            customer_id=customer_id, operations=[operation])
+    except _google_errors() as exc:
+        return False, f"Failed to update budget: {exc}"
+    return True, f"Google Ads budget updated to {new_budget:.2f}: {result.results[0].resource_name}"
 
 
-# ── Meta Ads integration (reuses meta_ads.py patterns) ──────────────────────
+# ── Meta Ads ────────────────────────────────────────────────────────────────
 
-GRAPH_API_VERSION = "v21.0"
-MAX_BUDGET_CHANGE_PCT = 0.20  # rule 3: respect learning
+def _meta_get(url: str, params: dict) -> dict:
+    import requests
+    try:
+        resp = requests.get(url, params=params, timeout=30)
+        resp.raise_for_status()
+        return resp.json()
+    except (requests.RequestException, ValueError) as exc:
+        raise LiveFetchError(f"Meta Ads API call failed: {exc}") from exc
 
 
 def _meta_fetch_campaigns(tenant: TenantContext) -> dict[str, dict]:
-    """Pull live Meta Ads campaign data. Returns empty dict if creds missing."""
-    try:
-        access_token, ad_account_id = tenant.require("META_ACCESS_TOKEN", "META_AD_ACCOUNT_ID")
-    except TenantConfigError:
-        return {}
-
-    try:
-        import requests
-    except ImportError:
-        print("WARNING: requests not installed — skipping Meta Ads pull.", file=sys.stderr)
-        return {}
-
-    try:
-        url = f"https://graph.facebook.com/{GRAPH_API_VERSION}/act_{ad_account_id}/campaigns"
-        params = {
-            "fields": "id,name,status,daily_budget,lifetime_budget",
-            "access_token": access_token, "limit": 200,
-        }
-        resp = requests.get(url, params=params, timeout=30)
-        resp.raise_for_status()
-    except Exception as e:
-        print(f"WARNING: Meta Ads API call failed (likely placeholder creds): {e}",
-              file=sys.stderr)
-        return {}
+    """Pull live Meta campaigns + 7d insights. Raises LiveFetchError on failure."""
+    access_token, ad_account_id = tenant.require(*META_KEYS)
+    base = f"https://graph.facebook.com/{GRAPH_API_VERSION}/act_{ad_account_id}"
+    data = _meta_get(f"{base}/campaigns", {
+        "fields": "id,name,status,daily_budget,lifetime_budget",
+        "access_token": access_token, "limit": 200})  # ponytail: no pagination past 200
 
     campaigns: dict[str, dict] = {}
-    for row in resp.json().get("data", []):
+    for row in data.get("data", []):
         budget_cents = row.get("daily_budget") or row.get("lifetime_budget") or "0"
         campaigns[row["id"]] = {
-            "id": row["id"],
-            "name": row["name"],
-            "status": row["status"],
-            "budget": int(budget_cents) / 100,
-            "platform": "meta",
+            "id": row["id"], "name": row["name"], "status": row["status"],
+            "budget": int(budget_cents) / 100, "platform": "meta",
             "impressions": 0, "clicks": 0, "cost": 0.0, "conversions": 0.0,
         }
 
-    # Fetch insights
-    import datetime as dt
-    since = (dt.date.today() - dt.timedelta(days=7)).isoformat()
-    until = dt.date.today().isoformat()
-    insights_url = f"https://graph.facebook.com/{GRAPH_API_VERSION}/act_{ad_account_id}/insights"
-    insights_params = {
+    today = datetime.date.today()
+    insights = _meta_get(f"{base}/insights", {
         "level": "campaign",
         "fields": "campaign_id,impressions,clicks,spend,actions",
-        "time_range": json.dumps({"since": since, "until": until}),
-        "time_increment": 1,
-        "access_token": access_token, "limit": 500,
-    }
-    resp2 = requests.get(insights_url, params=insights_params, timeout=30)
-    resp2.raise_for_status()
+        "time_range": json.dumps({"since": (today - datetime.timedelta(days=7)).isoformat(),
+                                  "until": today.isoformat()}),
+        "time_increment": 1, "access_token": access_token, "limit": 500})
 
     from loops.meta_ads import CONVERSION_ACTION_TYPES
-    for row in resp2.json().get("data", []):
-        cid = row["campaign_id"]
-        if cid not in campaigns:
+    for row in insights.get("data", []):
+        c = campaigns.get(row["campaign_id"])
+        if c is None:
             continue
-        c = campaigns[cid]
         c["impressions"] += int(row.get("impressions", 0))
         c["clicks"] += int(row.get("clicks", 0))
         c["cost"] += float(row.get("spend", 0))
         c["conversions"] += sum(
             float(a["value"]) for a in row.get("actions", [])
-            if a.get("action_type") in CONVERSION_ACTION_TYPES
-        )
+            if a.get("action_type") in CONVERSION_ACTION_TYPES)
+    return _finish_rates(campaigns)
 
-    for c in campaigns.values():
-        c["ctr"] = (c["clicks"] / c["impressions"] * 100) if c["impressions"] else 0.0
-        c["cpa"] = (c["cost"] / c["conversions"]) if c["conversions"] else None
 
-    return campaigns
+def _meta_post(tenant: TenantContext, campaign_id: str, body: dict,
+               ok_msg: str, fail_msg: str) -> tuple[bool, str]:
+    import requests
+    access_token, _ = tenant.require(*META_KEYS)
+    url = f"https://graph.facebook.com/{GRAPH_API_VERSION}/{campaign_id}"
+    try:
+        resp = requests.post(url, params={"access_token": access_token},
+                             json=body, timeout=30)
+    except requests.RequestException as exc:
+        return False, f"{fail_msg}: {exc}"
+    if resp.status_code == 200:
+        return True, ok_msg
+    return False, f"{fail_msg}: {resp.text}"
 
 
 def _meta_pause_campaign(tenant: TenantContext, campaign_id: str) -> tuple[bool, str]:
-    """Pause a Meta campaign. Returns (success, message)."""
-    import requests
-
-    access_token, _ = tenant.require("META_ACCESS_TOKEN", "META_AD_ACCOUNT_ID")
-    url = f"https://graph.facebook.com/{GRAPH_API_VERSION}/{campaign_id}"
-    resp = requests.post(url, params={"access_token": access_token},
-                         json={"status": "PAUSED"}, timeout=30)
-    if resp.status_code == 200:
-        return True, f"Meta campaign {campaign_id} paused."
-    return False, f"Failed to pause Meta campaign {campaign_id}: {resp.text}"
+    return _meta_post(tenant, campaign_id, {"status": "PAUSED"},
+                      f"Meta campaign {campaign_id} paused.",
+                      f"Failed to pause Meta campaign {campaign_id}")
 
 
 def _meta_update_budget(tenant: TenantContext, campaign_id: str,
                         new_budget: float) -> tuple[bool, str]:
-    """Update a Meta campaign daily budget. Budget in cents."""
-    import requests
+    """Daily budget, in cents on the wire."""
+    return _meta_post(tenant, campaign_id, {"daily_budget": int(new_budget * 100)},
+                      f"Meta campaign {campaign_id} budget updated to {new_budget:.2f}.",
+                      "Failed to update Meta budget")
 
-    access_token, _ = tenant.require("META_ACCESS_TOKEN", "META_AD_ACCOUNT_ID")
-    url = f"https://graph.facebook.com/{GRAPH_API_VERSION}/{campaign_id}"
-    resp = requests.post(url, params={"access_token": access_token},
-                         json={"daily_budget": int(new_budget * 100)}, timeout=30)
-    if resp.status_code == 200:
-        return True, f"Meta campaign {campaign_id} budget updated to {new_budget:.2f}."
-    return False, f"Failed to update Meta budget: {resp.text}"
+
+def _finish_rates(campaigns: dict[str, dict]) -> dict[str, dict]:
+    for c in campaigns.values():
+        c["ctr"] = (c["clicks"] / c["impressions"] * 100) if c["impressions"] else 0.0
+        c["cpa"] = (c["cost"] / c["conversions"]) if c["conversions"] else None
+    return campaigns
+
+
+# ── Cumulative budget guardrail ─────────────────────────────────────────────
+
+def _ledger_path(tenant: TenantContext) -> Path:
+    return tenant.reports_dir / LEDGER_NAME
+
+
+def _read_ledger(path: Path) -> list[dict]:
+    if not path.exists():
+        return []
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        # Fail closed: a corrupt ledger must not silently disable the cap.
+        raise LiveFetchError(f"Budget ledger unreadable ({path}): {exc}") from exc
+
+
+def budget_baseline(ledger: list[dict], key: str, current: float,
+                    now: datetime.datetime | None = None) -> float:
+    """The budget the 20% cap is measured against: the earliest 'from' value
+    recorded for this campaign inside the rolling window, else the live budget."""
+    now = now or datetime.datetime.now()
+    cutoff = now - datetime.timedelta(days=BUDGET_WINDOW_DAYS)
+    recent = [e for e in ledger
+              if e["key"] == key and datetime.datetime.fromisoformat(e["ts"]) >= cutoff]
+    return min(recent, key=lambda e: e["ts"])["from"] if recent else current
+
+
+def _record_budget_change(path: Path, key: str, old: float, new: float) -> None:
+    ledger = _read_ledger(path)
+    ledger.append({"ts": datetime.datetime.now().isoformat(timespec="seconds"),
+                   "key": key, "from": old, "to": new})
+    path.write_text(json.dumps(ledger, indent=2), encoding="utf-8")
 
 
 # ── Unified fetch ───────────────────────────────────────────────────────────
 
-def _fetch_all(tenant: TenantContext) -> dict[str, dict]:
-    """Pull from every configured platform. Keys are prefixed with platform."""
-    all_campaigns: dict[str, dict] = {}
-    google = _google_fetch_campaigns(tenant)
-    for cid, c in google.items():
-        all_campaigns[f"google:{cid}"] = c
-    meta = _meta_fetch_campaigns(tenant)
-    for cid, c in meta.items():
-        all_campaigns[f"meta:{cid}"] = c
-    return all_campaigns
+def _fetch_all(tenant: TenantContext) -> tuple[dict[str, dict], dict[str, str], list[str]]:
+    """Pull from every configured platform.
+    Returns (campaigns keyed 'platform:id', errors by platform, configured platforms)."""
+    campaigns: dict[str, dict] = {}
+    errors: dict[str, str] = {}
+    configured: list[str] = []
+    for platform, keys, fetch in (("google", GOOGLE_KEYS, _google_fetch_campaigns),
+                                  ("meta", META_KEYS, _meta_fetch_campaigns)):
+        if not _is_configured(tenant, keys):
+            continue
+        configured.append(platform)
+        try:
+            for cid, c in fetch(tenant).items():
+                campaigns[f"{platform}:{cid}"] = c
+        except LiveFetchError as exc:
+            errors[platform] = str(exc)
+    return campaigns, errors, configured
 
 
 def _parse_platform_key(key: str) -> tuple[str, str]:
@@ -526,19 +548,28 @@ def _cmd_budget(tenant: TenantContext, campaigns: dict[str, dict],
     c = campaigns[campaign_key]
     platform, cid = _parse_platform_key(campaign_key)
     current = c["budget"]
-    change_pct = abs(new_budget - current) / current if current else 0
+    try:
+        ledger = _read_ledger(_ledger_path(tenant))
+    except LiveFetchError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+    baseline = budget_baseline(ledger, campaign_key, current)
+    change_pct = abs(new_budget - baseline) / baseline if baseline else 0
 
     # Show the exact change BEFORE executing
     print(f"⚠️  ABOUT TO CHANGE BUDGET: {platform} campaign '{c['name']}' (ID: {cid})")
     print(f"   Current budget: {current:.2f}")
     print(f"   Proposed budget: {new_budget:.2f}")
-    print(f"   Change: {new_budget - current:+.2f} ({change_pct * 100:+.1f}%)")
+    print(f"   Change: {new_budget - current:+.2f}")
+    if baseline != current:
+        print(f"   {BUDGET_WINDOW_DAYS}-day baseline: {baseline:.2f} (earlier changes in the window count)")
+    print(f"   Cumulative vs baseline: {(new_budget - baseline) / baseline * 100 if baseline else 0:+.1f}%")
 
     if change_pct > MAX_BUDGET_CHANGE_PCT:
-        print(f"\n   ❌ BLOCKED: change is {change_pct * 100:.1f}% — exceeds the "
-              f"{MAX_BUDGET_CHANGE_PCT * 100:.0f}% cap per action (rule: respect learning).")
-        print(f"   Maximum allowed change: {current * (1 + MAX_BUDGET_CHANGE_PCT):.2f} "
-              f"or {current * (1 - MAX_BUDGET_CHANGE_PCT):.2f}")
+        print(f"\n   ❌ BLOCKED: cumulative change is {change_pct * 100:.1f}% — exceeds the "
+              f"{MAX_BUDGET_CHANGE_PCT * 100:.0f}% cap per {BUDGET_WINDOW_DAYS} days (rule: respect learning).")
+        print(f"   Allowed range: {baseline * (1 - MAX_BUDGET_CHANGE_PCT):.2f} "
+              f"to {baseline * (1 + MAX_BUDGET_CHANGE_PCT):.2f}")
         return 2
 
     if not opts.get("confirm"):
@@ -556,6 +587,7 @@ def _cmd_budget(tenant: TenantContext, campaigns: dict[str, dict],
 
     print(f"\n{'✅' if ok else '❌'} {msg}")
     if ok:
+        _record_budget_change(_ledger_path(tenant), campaign_key, current, new_budget)
         append_log(tenant.name, "campaigns-budget",
                    f"Budget {platform} campaign '{c['name']}' (ID: {cid}): "
                    f"{current:.2f} -> {new_budget:.2f} ({change_pct * 100:+.1f}%)",
@@ -569,10 +601,23 @@ def run(tenant: TenantContext, opts: dict | None = None) -> int:
     opts = opts or {}
     verb = opts.get("verb", "pull")
 
-    # Pull live data (works for all verbs — read-only verbs need it, write
-    # verbs need it to validate the campaign ID exists)
-    campaigns = _fetch_all(tenant)
+    campaigns, errors, configured = _fetch_all(tenant)
+    if not configured:
+        print(f"[{tenant.name}] campaigns {verb}: no ad platform configured. "
+              "Add Google Ads and/or Meta credentials to the tenant .env.", file=sys.stderr)
+        return 1
+    for platform, msg in errors.items():
+        print(f"❌ {platform} FETCH FAILED: {msg}", file=sys.stderr)
+    if errors and verb in ("pause", "budget"):
+        print("Refusing to write with stale/partial account state. Fix the error above and retry.",
+              file=sys.stderr)
+        return 1
 
+    code = _dispatch(tenant, verb, campaigns, opts)
+    return 1 if errors and code == 0 else code
+
+
+def _dispatch(tenant: TenantContext, verb: str, campaigns: dict[str, dict], opts: dict) -> int:
     if verb == "pull":
         return _cmd_pull(tenant, campaigns)
     elif verb == "optimize":

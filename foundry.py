@@ -49,6 +49,13 @@ Groups and verbs:
   Multi-tenant:
     foundry tenants list                    list all configured tenants
 
+  Setup:
+    foundry setup init --client <Name>      scaffold a tenant in your workspace
+    foundry setup doctor                    check Python, deps, workspace
+
+Workspace: the folder you run from (or $FOUNDRY_WORKSPACE) holds 02_Active_Clients/,
+log.md, signals/ and tasks/. The Foundry code itself is never written to.
+
 Every verb is deterministic Python over this tenant's kernel state. No LLM
 calls — judgment work belongs to the AI interface layer (skills and agents);
 numbers belong to code. Reports write to 04_Reports/ and log.md.
@@ -75,7 +82,7 @@ from commands import calc_commands  # noqa: E402
 # ── additional command modules ─────────────────────────────────────────────
 from commands import (  # noqa: E402
     campaigns, content, tracking, ops, tenants, creative,
-    leads, competitive, season, forecast,
+    leads, competitive, season, forecast, setup,
 )
 
 # ── Group → verb → module mapping ──────────────────────────────────────────
@@ -133,6 +140,10 @@ GROUPS: dict[str, dict[str, dict]] = {
     },
     "tenants": {
         "list": {"module": "tenants", "tenant": False},
+    },
+    "setup": {
+        "init":   {"module": "setup", "tenant": False, "func": "cmd_init", "accepts_client": True},
+        "doctor": {"module": "setup", "tenant": False, "func": "cmd_doctor"},
     },
 }
 
@@ -208,7 +219,7 @@ def main(argv: list[str] | None = None) -> int:
     if needs_tenant and not args.client:
         print(f"ERROR: '{group} {verb}' requires --client.", file=sys.stderr)
         return 1
-    if not needs_tenant and args.client:
+    if not needs_tenant and args.client and not spec.get("accepts_client"):
         print(f"ERROR: '{group} {verb}' does not accept --client.", file=sys.stderr)
         return 1
 
@@ -222,6 +233,7 @@ def main(argv: list[str] | None = None) -> int:
         "confirm": args.confirm,
         "as_json": args.as_json,
         "verb": verb,
+        "client": args.client,
     }
 
     try:

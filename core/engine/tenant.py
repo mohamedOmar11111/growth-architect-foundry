@@ -17,8 +17,7 @@ from pathlib import Path
 
 from dotenv import dotenv_values
 
-HQ_ROOT = Path(__file__).resolve().parents[2]
-CLIENTS_ROOT = HQ_ROOT / "02_Active_Clients"
+from paths import CLIENTS_ROOT  # noqa: E402
 
 REQUIRED_FILES = (".env", "STRATEGY.md")
 
