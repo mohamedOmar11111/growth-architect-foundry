@@ -102,11 +102,28 @@ def _read_optional(path: Path) -> str:
     return path.read_text(encoding="utf-8") if path.exists() else ""
 
 
-def _log_tail(path: Path, n: int) -> str:
+def _log_tail(path: Path, n: int, client: str | None = None) -> str:
+    """Last n log lines. For a tenant-scoped run only that tenant's entries are
+    returned — the shared root log also holds other clients' activity, and this
+    text is sent to a third-party LLM."""
     if not path.exists():
         return "(no log.md yet — this will be the first run logged)"
-    lines = path.read_text(encoding="utf-8").splitlines()
-    return "\n".join(lines[-n:])
+    text = path.read_text(encoding="utf-8")
+    if client:
+        blocks = text.split("\n## ")
+        mine = [b for b in blocks if b.split("\n", 1)[0].split(" — ", 1)[-1].startswith(f"{client} /")]
+        text = "\n## ".join(mine)
+    return "\n".join(text.splitlines()[-n:])
+
+
+def _read_in(root: Path, name: str) -> str:
+    """Read root/name, refusing symlinks and anything resolving outside root."""
+    path = root / name
+    if not path.exists():
+        return ""
+    if path.is_symlink() or root.resolve() not in path.resolve().parents:
+        raise AgentShimError(f"'{name}' in {root.name} is a symlink or escapes the folder — refusing.")
+    return path.read_text(encoding="utf-8")
 
 
 def build_context(loop: str, client: str | None) -> str:
@@ -130,7 +147,7 @@ def build_context(loop: str, client: str | None) -> str:
         f"\n# Domain Contract — {loop}",
         domain_readme.read_text(encoding="utf-8"),
         f"\n# log.md (last {LOG_TAIL_LINES} lines)",
-        _log_tail(LOG_PATH, LOG_TAIL_LINES),
+        _log_tail(LOG_PATH, LOG_TAIL_LINES, client),
     ]
 
     if client:
@@ -150,9 +167,9 @@ def build_context(loop: str, client: str | None) -> str:
         sections += [
             f"\n# Tenant Context — {client}",
             "## CLAUDE.md" if (tenant_root / "CLAUDE.md").exists() else "",
-            _read_optional(tenant_root / "CLAUDE.md"),
+            _read_in(tenant_root, "CLAUDE.md"),
             "## STRATEGY.md" if (tenant_root / "STRATEGY.md").exists() else "",
-            _read_optional(tenant_root / "STRATEGY.md"),
+            _read_in(tenant_root, "STRATEGY.md"),
         ]
 
     return "\n".join(s for s in sections if s)
@@ -281,10 +298,15 @@ def run(loop: str, client: str | None, task: str) -> int:
     call_fn = PROVIDERS[provider][1]
     result = call_fn(api_key, system_prompt, task)
 
-    drafts_dir = DOMAIN_WORKSPACE / loop / "drafts"
+    # Tenant-scoped runs write inside that tenant's own folder so one client's
+    # model output (grounded in their STRATEGY.md) never lands in a shared dir.
+    if client:
+        drafts_dir = CLIENTS_ROOT / client / "04_Reports" / "drafts" / loop
+    else:
+        drafts_dir = DOMAIN_WORKSPACE / loop / "drafts"
     drafts_dir.mkdir(parents=True, exist_ok=True)
     now = datetime.datetime.now()
-    draft_path = drafts_dir / f"{now.strftime('%Y-%m-%d-%H%M')}-agent-shim-{provider}.md"
+    draft_path = drafts_dir / f"{now.strftime('%Y-%m-%d-%H%M%S')}-agent-shim-{provider}.md"
     scope_note = f" (tenant: {client})" if client else " (root scope)"
     draft_path.write_text(
         f"# Agent Shim Run — {loop}{scope_note} — {now.strftime('%Y-%m-%d %H:%M')}\n\n"

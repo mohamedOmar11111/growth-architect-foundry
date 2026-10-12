@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from tenant import TenantContext, TenantConfigError
-from utils import append_log
+from utils import append_log, sanitize_text
 
 GRAPH_API_VERSION = "v21.0"
 MAX_BUDGET_CHANGE_PCT = 0.20  # rule 3: respect learning
@@ -77,7 +77,13 @@ def _google_client(tenant: TenantContext):
     try:
         return GoogleAdsClient.load_from_dict(config)
     except (ValueError, KeyError, *_google_errors()) as exc:
-        raise LiveFetchError(f"Google Ads client init failed: {exc}") from exc
+        raise LiveFetchError(f"Google Ads client init failed: {_gerr(tenant, exc)}") from exc
+
+
+def _gerr(tenant: TenantContext, exc: Exception) -> str:
+    """Google exception text with this tenant's credentials scrubbed."""
+    return _safe_error(exc, *(tenant.env.get(k, "") for k in (
+        "GOOGLE_ADS_CLIENT_SECRET", "GOOGLE_ADS_REFRESH_TOKEN", "GOOGLE_ADS_DEVELOPER_TOKEN")))
 
 
 def _google_errors() -> tuple[type[Exception], ...]:
@@ -112,14 +118,14 @@ def _google_fetch_campaigns(tenant: TenantContext) -> dict[str, dict]:
         )
         rows = list(response)
     except _google_errors() as exc:
-        raise LiveFetchError(f"Google Ads API error: {exc}") from exc
+        raise LiveFetchError(f"Google Ads API error: {_gerr(tenant, exc)}") from exc
 
     campaigns: dict[str, dict] = {}
     for row in rows:
         cid = str(row.campaign.id)
         if cid not in campaigns:
             campaigns[cid] = {
-                "id": cid, "name": row.campaign.name,
+                "id": cid, "name": sanitize_text(row.campaign.name),
                 "status": row.campaign.status.name,
                 "budget": row.campaign_budget.amount_micros / 1_000_000,
                 "platform": "google",
@@ -148,7 +154,7 @@ def _google_pause_campaign(tenant: TenantContext, campaign_id: str) -> tuple[boo
         response = campaign_service.mutate_campaigns(
             customer_id=customer_id, operations=[operation])
     except _google_errors() as exc:
-        return False, f"Failed to pause Google Ads campaign {campaign_id}: {exc}"
+        return False, f"Failed to pause Google Ads campaign {campaign_id}: {_gerr(tenant, exc)}"
     return True, f"Google Ads campaign {campaign_id} paused: {response.results[0].resource_name}"
 
 
@@ -165,7 +171,7 @@ def _google_update_budget(tenant: TenantContext, campaign_id: str,
                    f"WHERE campaign.id = {int(campaign_id)}"),
         ))
     except (*_google_errors(), ValueError) as exc:
-        return False, f"Could not look up campaign {campaign_id}: {exc}"
+        return False, f"Could not look up campaign {campaign_id}: {_gerr(tenant, exc)}"
     if not found or not found[0].campaign.campaign_budget:
         return False, f"Campaign {campaign_id} not found or has no budget."
 
@@ -180,7 +186,7 @@ def _google_update_budget(tenant: TenantContext, campaign_id: str,
         result = budget_service.mutate_campaign_budgets(
             customer_id=customer_id, operations=[operation])
     except _google_errors() as exc:
-        return False, f"Failed to update budget: {exc}"
+        return False, f"Failed to update budget: {_gerr(tenant, exc)}"
     return True, f"Google Ads budget updated to {new_budget:.2f}: {result.results[0].resource_name}"
 
 
@@ -219,7 +225,7 @@ def _meta_fetch_campaigns(tenant: TenantContext) -> dict[str, dict]:
     for row in data.get("data", []):
         budget_cents = row.get("daily_budget") or row.get("lifetime_budget") or "0"
         campaigns[row["id"]] = {
-            "id": row["id"], "name": row["name"], "status": row["status"],
+            "id": row["id"], "name": sanitize_text(row["name"]), "status": row["status"],
             "budget": int(budget_cents) / 100, "platform": "meta",
             "impressions": 0, "clicks": 0, "cost": 0.0, "conversions": 0.0,
         }
