@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import math
 import sys
 from pathlib import Path
 from typing import Any
@@ -549,6 +550,12 @@ def _cmd_budget(tenant: TenantContext, campaigns: dict[str, dict],
     except (TypeError, ValueError):
         print(f"ERROR: --new-budget must be a number, got '{new_budget_raw}'.", file=sys.stderr)
         return 2
+    # float("nan") parses fine and `nan > cap` is False, which would silently
+    # bypass the cap; inf/negative/zero are never a valid daily budget either.
+    if not math.isfinite(new_budget) or new_budget <= 0:
+        print(f"ERROR: --new-budget must be a finite number > 0, got '{new_budget_raw}'.",
+              file=sys.stderr)
+        return 2
 
     if campaign_key not in campaigns:
         available = ", ".join(sorted(campaigns.keys()))
@@ -565,7 +572,14 @@ def _cmd_budget(tenant: TenantContext, campaigns: dict[str, dict],
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
     baseline = budget_baseline(ledger, campaign_key, current)
-    change_pct = abs(new_budget - baseline) / baseline if baseline else 0
+    if baseline <= 0:
+        # No known starting budget (e.g. budget lives on ad sets, or lifetime
+        # budget): the 20% cap cannot be evaluated, so fail closed.
+        print(f"ERROR: campaign '{c['name']}' reports no campaign-level budget ({baseline:.2f}); "
+              "the cumulative cap cannot be verified. Change it in the ad platform UI.",
+              file=sys.stderr)
+        return 2
+    change_pct = abs(new_budget - baseline) / baseline
 
     # Show the exact change BEFORE executing
     print(f"⚠️  ABOUT TO CHANGE BUDGET: {platform} campaign '{c['name']}' (ID: {cid})")
@@ -574,7 +588,7 @@ def _cmd_budget(tenant: TenantContext, campaigns: dict[str, dict],
     print(f"   Change: {new_budget - current:+.2f}")
     if baseline != current:
         print(f"   {BUDGET_WINDOW_DAYS}-day baseline: {baseline:.2f} (earlier changes in the window count)")
-    print(f"   Cumulative vs baseline: {(new_budget - baseline) / baseline * 100 if baseline else 0:+.1f}%")
+    print(f"   Cumulative vs baseline: {(new_budget - baseline) / baseline * 100:+.1f}%")
 
     if change_pct > MAX_BUDGET_CHANGE_PCT:
         print(f"\n   ❌ BLOCKED: cumulative change is {change_pct * 100:.1f}% — exceeds the "
