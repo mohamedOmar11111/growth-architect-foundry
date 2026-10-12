@@ -11,6 +11,8 @@ numbers — same rule as diagnose and audit.
 
 from __future__ import annotations
 
+import sys
+
 from typing import Any
 
 from tenant import TenantContext

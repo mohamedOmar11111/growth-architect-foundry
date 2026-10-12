@@ -234,15 +234,18 @@ def format_audit(tenant: TenantContext, snap: dict, audit: dict) -> str:
 
     lines += ["", "## 30-Day Plan"]
     if fixes:
+        stop_text = (
+            'Stop leaving high-priority signals unprocessed'
+            if snap['high_unprocessed'] else
+            'Nothing identified as waste in current data — revisit once '
+            'ad-intel has real spend data to look at'
+        )
         lines += [
             f"- **Do today:** {FIX_TEXT[fixes[0]]}",
             f"- **Test this week:** {FIX_TEXT[fixes[1] if len(fixes) > 1 else fixes[0]]} "
             "Hypothesis: acting on this moves the dimension score above 70 "
             "within 7 days — re-run `audit` and compare.",
-            f"- **Stop / reduce:** {'Stop leaving high-priority signals unprocessed'
-                if snap['high_unprocessed'] else
-                'Nothing identified as waste in current data — revisit once '
-                'ad-intel has real spend data to look at'}.",
+            f"- **Stop / reduce:** {stop_text}.",
         ]
     else:
         lines += [

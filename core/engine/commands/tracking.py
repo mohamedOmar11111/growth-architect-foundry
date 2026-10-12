@@ -10,6 +10,7 @@ unconfigured on purpose, so the first honest check is always a wake-up call.
 
 from __future__ import annotations
 
+import sys
 from tenant import TenantContext
 from utils import append_log
 from commands.state import collect_snapshot, config_status
@@ -28,7 +29,7 @@ def _format_check(snap: dict) -> str:
 
     lines += [
         "",
-        f"Operator name: {'set' if cfg['operator_set'] else 'not set (will default to \"the operator\")'}",
+        "Operator name: " + ("set" if cfg['operator_set'] else 'not set (will default to "the operator")'),
         f"Target CPA: {'set' if cfg['target_cpa'] else 'not set (advice without a target is content, not media buying)'}",
     ]
 

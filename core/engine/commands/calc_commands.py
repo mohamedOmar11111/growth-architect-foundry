@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 import sys
 
-from calc import cmd_breakeven, cmd_cod, cmd_learning, cmd_vat, render_text
+from calc import render_text
 
 
 def _parse_numbers(opts: dict, *keys: str) -> dict:
@@ -128,8 +128,8 @@ def cmd_learning(opts: dict) -> int:
 
 
 def cmd_learning_impl(ns):
-    from calc import cmd_learning as _calc_learning
-    return _calc_learning(ns)
+    import calc
+    return calc.cmd_learning(ns)
 
 
 def cmd_vat(opts: dict) -> int:
@@ -138,5 +138,5 @@ def cmd_vat(opts: dict) -> int:
 
 
 def cmd_vat_impl(ns):
-    from calc import cmd_vat as _calc_vat
-    return _calc_vat(ns)
+    import calc
+    return calc.cmd_vat(ns)

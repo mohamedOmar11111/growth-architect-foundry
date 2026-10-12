@@ -10,6 +10,7 @@ zero runs, nothing else in the system can produce useful output.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 from tenant import TenantContext, CLIENTS_ROOT

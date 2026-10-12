@@ -10,6 +10,8 @@ so the operator always sees the real pipeline state.
 
 from __future__ import annotations
 
+import sys
+
 from tenant import TenantContext
 from utils import append_log
 from commands.state import collect_snapshot

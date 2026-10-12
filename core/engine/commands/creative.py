@@ -11,6 +11,8 @@ real performance data, not theory.
 
 from __future__ import annotations
 
+import sys
+
 from tenant import TenantContext
 from utils import append_log
 from commands.state import collect_snapshot
