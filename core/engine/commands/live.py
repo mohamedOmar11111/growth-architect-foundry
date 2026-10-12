@@ -185,6 +185,16 @@ def _google_update_budget(tenant: TenantContext, campaign_id: str,
 
 # ── Meta Ads ────────────────────────────────────────────────────────────────
 
+def _safe_error(exc: Exception, *secrets: str) -> str:
+    """Error text with credentials scrubbed. requests embeds the full URL
+    (including ?access_token=...) in its exception messages."""
+    text = str(exc)
+    for secret in secrets:
+        if secret:
+            text = text.replace(secret, "***")
+    return text
+
+
 def _meta_get(url: str, params: dict) -> dict:
     import requests
     try:
@@ -192,7 +202,8 @@ def _meta_get(url: str, params: dict) -> dict:
         resp.raise_for_status()
         return resp.json()
     except (requests.RequestException, ValueError) as exc:
-        raise LiveFetchError(f"Meta Ads API call failed: {exc}") from exc
+        raise LiveFetchError(
+            f"Meta Ads API call failed: {_safe_error(exc, params.get('access_token', ''))}") from exc
 
 
 def _meta_fetch_campaigns(tenant: TenantContext) -> dict[str, dict]:
@@ -243,10 +254,10 @@ def _meta_post(tenant: TenantContext, campaign_id: str, body: dict,
         resp = requests.post(url, params={"access_token": access_token},
                              json=body, timeout=30)
     except requests.RequestException as exc:
-        return False, f"{fail_msg}: {exc}"
+        return False, f"{fail_msg}: {_safe_error(exc, access_token)}"
     if resp.status_code == 200:
         return True, ok_msg
-    return False, f"{fail_msg}: {resp.text}"
+    return False, f"{fail_msg}: {_safe_error(Exception(resp.text), access_token)}"
 
 
 def _meta_pause_campaign(tenant: TenantContext, campaign_id: str) -> tuple[bool, str]:
@@ -502,7 +513,7 @@ def _cmd_pause(tenant: TenantContext, campaigns: dict[str, dict],
     print(f"   7-day spend: {c['cost']:.2f}")
     print(f"   7-day conversions: {c['conversions']:.0f}")
 
-    if not opts.get("confirm"):
+    if opts.get("confirm") is not True:
         print("\n   No --confirm flag passed. No changes made.")
         print("   To execute: add --confirm to the command.")
         return 0
@@ -572,7 +583,7 @@ def _cmd_budget(tenant: TenantContext, campaigns: dict[str, dict],
               f"to {baseline * (1 + MAX_BUDGET_CHANGE_PCT):.2f}")
         return 2
 
-    if not opts.get("confirm"):
+    if opts.get("confirm") is not True:
         print("\n   No --confirm flag passed. No changes made.")
         print("   To execute: add --confirm to the command.")
         return 0
@@ -612,6 +623,9 @@ def run(tenant: TenantContext, opts: dict | None = None) -> int:
         print("Refusing to write with stale/partial account state. Fix the error above and retry.",
               file=sys.stderr)
         return 1
+
+    if errors and not campaigns:
+        return 1  # nothing usable fetched: don't render an "empty account" report
 
     code = _dispatch(tenant, verb, campaigns, opts)
     return 1 if errors and code == 0 else code

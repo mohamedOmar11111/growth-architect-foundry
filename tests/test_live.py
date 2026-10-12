@@ -226,3 +226,32 @@ def test_google_client_init_auth_error_is_typed(tmp_path):
                side_effect=RefreshError("invalid_client")):
         with pytest.raises(live.LiveFetchError):
             live._google_client(tenant)
+
+
+# ── secrets never leak; confirm must be a bare flag ─────────────────────────
+
+def test_meta_http_error_does_not_leak_access_token():
+    import requests
+    err = requests.HTTPError("400 for url: https://graph.facebook.com/x?access_token=SECRET123&limit=1")
+    with patch("requests.get", side_effect=err):
+        with pytest.raises(live.LiveFetchError) as info:
+            live._meta_get("http://x", {"access_token": "SECRET123"})
+    assert "SECRET123" not in str(info.value)
+
+
+def test_meta_mutator_failure_does_not_leak_token(tmp_path):
+    import requests
+    tenant = make_tenant(tmp_path, {"META_ACCESS_TOKEN": "SECRET123", "META_AD_ACCOUNT_ID": "1"})
+    with patch("requests.post", side_effect=requests.ConnectionError("failed ?access_token=SECRET123")):
+        ok, msg = live._meta_pause_campaign(tenant, "9")
+    assert ok is False and "SECRET123" not in msg
+
+
+def test_confirm_with_a_value_does_not_authorise_writes(tmp_path):
+    """`--confirm 0.85` (an economics rate) must never count as write approval."""
+    tenant = make_tenant(tmp_path, META_ENV)
+    campaigns = {"meta:1": {"name": "c", "status": "ACTIVE", "cost": 1.0, "conversions": 0,
+                            "budget": 100.0, "platform": "meta"}}
+    with patch.object(live, "_meta_pause_campaign") as pause:
+        live._cmd_pause(tenant, campaigns, {"campaign_id": "meta:1", "confirm": "0.85"})
+        pause.assert_not_called()

@@ -147,6 +147,9 @@ GROUPS: dict[str, dict[str, dict]] = {
     },
 }
 
+ECON_KEYS = ("price", "cogs", "shipping", "fees", "deliver", "return_cost", "spend",
+             "orders", "aov", "ship_out", "cpa", "events", "budget", "country", "basis")
+
 # Flat command count for --version display
 TOTAL_COMMANDS = sum(len(verbs) for verbs in GROUPS.values())
 
@@ -189,8 +192,14 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Campaign ID for live operations (e.g., 'google:12345').")
     parser.add_argument("--new-budget", dest="new_budget", default=None,
                         help="New daily budget for budget changes.")
-    parser.add_argument("--confirm", action="store_true",
-                        help="Required for write operations (pause, budget).")
+    parser.add_argument("--confirm", nargs="?", const=True, default=False,
+                        help="Live writes: bare flag required (pause, budget). "
+                             "Economics: confirmation rate, e.g. --confirm 0.85.")
+    for flag in ("price", "cogs", "shipping", "fees", "deliver", "return-cost",
+                 "spend", "orders", "aov", "ship-out", "cpa", "events",
+                 "budget", "country", "basis"):
+        parser.add_argument(f"--{flag}", dest=flag.replace("-", "_"), default=None,
+                            help=f"Economics input ({flag}).")
     return parser
 
 
@@ -235,6 +244,8 @@ def main(argv: list[str] | None = None) -> int:
         "verb": verb,
         "client": args.client,
     }
+    for key in ECON_KEYS:
+        opts[key] = getattr(args, key)
 
     try:
         if needs_tenant:
