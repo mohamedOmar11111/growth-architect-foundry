@@ -156,4 +156,4 @@ from `calc.py` with assumptions printed alongside every number.
 
 ## License
 
-MIT. Developed by Mohamed Omar (@mohamedOmar11111) | The Growth Architect.
+MIT (see LICENSE). Bundled third-party content keeps its own licences: see NOTICE.md and licenses/. Developed by Mohamed Omar (@mohamedOmar11111) | The Growth Architect.

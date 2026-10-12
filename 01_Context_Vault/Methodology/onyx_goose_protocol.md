@@ -30,11 +30,10 @@ Move from flat-file ingestion to relationship-based "Knowledge Graphs."
 *   **Token Efficiency:** Prioritize querying the "Map" over reading entire directories. Target 50x+ reduction in context usage for high-volume research.
 *   **God Node Identification:** Surface the single most important design rationale or "Core Logic" that connects all client assets.
 
-## 6. The Karpathy Protocol (Simplicity & Surgical)
-Adhere to the [[01_Context_Vault/Methodology/karpathy_rules|Karpathy Protocol]] for all execution.
+## 6. Simplicity & Surgical Impact
 *   **Simplicity First:** Discard any strategic layer that doesn't produce immediate revenue.
 *   **Surgical Impact:** Target only the necessary "Node" for change. Zero drive-by refactoring.
 *   **Verification Cycles:** Defined success criteria (KPIs) are mandatory before any "Recipe" launch.
 
 ---
-*Status: INTEGRATED | Version: 1.2 (Karpathy-Enhanced)*
+*Status: INTEGRATED | Version: 1.2 (Simplicity-Enhanced)*

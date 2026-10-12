@@ -2,7 +2,7 @@
 
 Zero tenant-specific values. Everything comes from the injected TenantContext:
 credentials, customer_id, output paths. Ported from the original hardcoded
-scripts/check_trips_campaigns.py (Acme-Trips only, 2 hardcoded campaign
+a single-account script (2 hardcoded campaign
 IDs) — this version discovers campaigns dynamically per tenant account, so
 there is nothing left to hardcode even as new tenants come online.
 

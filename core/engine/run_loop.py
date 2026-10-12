@@ -2,12 +2,12 @@
 Engine loop and command.
 
 Nothing in this file is Windows-specific. Callable today from Windows Task
-Scheduler exactly like the old scripts/check_trips_campaigns.py cron; callable
+Scheduler exactly like the old single-account cron script; callable
 tomorrow from cron or GCP Cloud Scheduler + Cloud Run with zero changes here —
 only the trigger changes, not this script.
 
 Usage:
-    python run_loop.py ad-intel --client Acme_Store     (Tenant Bus)
+    python run_loop.py ad-intel --client Acme_Store        (Tenant Bus)
     python run_loop.py lead-qualify                        (Root Bus — no --client)
     python run_loop.py audit --client Aurora_Skincare      (Command)
     python run_loop.py report --client Aurora_Skincare --lang ar --period month
