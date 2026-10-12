@@ -100,6 +100,12 @@ GROUPS: dict[str, dict[str, dict]] = {
         "status":  {"module": "campaigns", "tenant": True},
         "compare": {"module": "campaigns", "tenant": True},
     },
+    "live": {
+        "pull":    {"module": "live", "tenant": True},
+        "optimize": {"module": "live", "tenant": True},
+        "pause":   {"module": "live", "tenant": True},
+        "budget":  {"module": "live", "tenant": True},
+    },
     "content": {
         "pipeline": {"module": "content", "tenant": True},
         "calendar": {"module": "content", "tenant": True},
@@ -168,6 +174,12 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Target CPA override.")
     parser.add_argument("--json", dest="as_json", action="store_true",
                         help="Machine-readable JSON output.")
+    parser.add_argument("--campaign-id", dest="campaign_id", default=None,
+                        help="Campaign ID for live operations (e.g., 'google:12345').")
+    parser.add_argument("--new-budget", dest="new_budget", default=None,
+                        help="New daily budget for budget changes.")
+    parser.add_argument("--confirm", action="store_true",
+                        help="Required for write operations (pause, budget).")
     return parser
 
 
@@ -205,6 +217,9 @@ def main(argv: list[str] | None = None) -> int:
         "lang": args.lang,
         "period": args.period,
         "target_cpa": args.target_cpa,
+        "campaign_id": args.campaign_id,
+        "new_budget": args.new_budget,
+        "confirm": args.confirm,
         "as_json": args.as_json,
         "verb": verb,
     }

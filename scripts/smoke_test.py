@@ -279,6 +279,11 @@ def check_foundry_cli() -> tuple[bool, str]:
          ["Seasonal Plan"]),
         (["foundry.py", "tenants", "list"],
          ["Tenants"]),
+        # Live read commands must fail gracefully without real credentials
+        (["foundry.py", "live", "pull", "--client", "Aurora_Skincare"],
+         ["no campaigns found"]),
+        (["foundry.py", "live", "optimize", "--client", "Aurora_Skincare"],
+         ["no campaigns"]),
     ]
     for cmd, markers in runs:
         result = run([sys.executable, *cmd], REPO_ROOT)

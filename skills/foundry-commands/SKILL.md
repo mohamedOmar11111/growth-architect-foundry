@@ -93,6 +93,16 @@ Reports write to `04_Reports/` and append to `log.md`.
 | `foundry tracking check --client <t>` | Credential readiness per integration |
 | `foundry tracking events --client <t>` | Optimization event audit per platform |
 
+### Live (requires API credentials — touches real accounts)
+| Command | Read/Write | What it does |
+|---|---|---|
+| `foundry live pull --client <t>` | Read | Pull live campaign data from Google Ads + Meta |
+| `foundry live optimize --client <t> [--target-cpa <v>]` | Read | Scale/hold/reduce/kill recommendations with numbers |
+| `foundry live pause --client <t> --campaign-id google:123 --confirm` | **Write** | Pause a campaign (--confirm required) |
+| `foundry live budget --client <t> --campaign-id meta:456 --new-budget 500 --confirm` | **Write** | Adjust budget (max 20% change, --confirm required) |
+
+Campaign IDs use `platform:id` format (e.g., `google:12345678`, `meta:23456789`). The `live pull` command outputs these keys.
+
 ### Leads / Creative / Competitive / Seasonal / Forecast / Ops
 | Command | What it does |
 |---|---|
