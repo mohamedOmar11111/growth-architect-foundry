@@ -8,10 +8,25 @@ tenant name except as a passed-in argument.
 from __future__ import annotations
 
 import datetime
+import re
 import subprocess
 from pathlib import Path
 
 from paths import WORKSPACE, LOG_PATH
+
+
+_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f\u2028\u2029]")
+
+
+def sanitize_text(value: object, maxlen: int = 120) -> str:
+    """Make untrusted text (ad-account campaign names, web-form lead fields)
+    safe to embed in one line of Markdown / a log entry / an LLM context:
+    no newlines or control characters (so it cannot forge a '## ...' log
+    header or a new instruction line), no table/code-span delimiters, bounded
+    length."""
+    text = _CONTROL_CHARS.sub(" ", str(value)).replace("|", "/").replace("`", "'")
+    text = " ".join(text.split())
+    return text[:maxlen]
 
 
 def append_log(tenant_name: str, loop_name: str, summary: str, report_path: Path) -> None:
@@ -20,8 +35,9 @@ def append_log(tenant_name: str, loop_name: str, summary: str, report_path: Path
     now = datetime.datetime.now()
     rel = report_path.relative_to(WORKSPACE).as_posix()
     entry = (
-        f"\n## {now.strftime('%Y-%m-%d %H:%M')} — {tenant_name} / {loop_name} (Growth Engine)\n"
-        f"- {summary}. Report: `{rel}`\n"
+        f"\n## {now.strftime('%Y-%m-%d %H:%M')} — {sanitize_text(tenant_name)} / "
+        f"{sanitize_text(loop_name)} (Growth Engine)\n"
+        f"- {sanitize_text(summary, 300)}. Report: `{rel}`\n"
     )
     with open(LOG_PATH, "a", encoding="utf-8") as f:
         f.write(entry)

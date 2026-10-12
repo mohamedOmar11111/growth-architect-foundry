@@ -20,6 +20,7 @@ from paths import CLIENTS_ROOT, ENGINE_ROOT, WORKSPACE
 
 TEMPLATE_TENANT = ENGINE_ROOT / "02_Active_Clients" / "Aurora_Skincare"
 NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$")
+RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
 
 # (import name, pip name, needed for)
 DEPENDENCIES = (
@@ -41,7 +42,7 @@ def _write_private(path, text: str) -> None:
 
 def cmd_init(opts: dict) -> int:
     name = opts.get("client")
-    if not name or not NAME_RE.match(name):
+    if not name or not NAME_RE.match(name) or name.upper() in RESERVED:
         print("ERROR: --client must be a plain folder name (letters, digits, _ or -), "
               "e.g. `setup init --client Acme_Store`.", file=sys.stderr)
         return 2

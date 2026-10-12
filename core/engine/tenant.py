@@ -34,7 +34,7 @@ class TenantContext:
         self.root = self._resolve_root(name)
         self._validate()
         self.env: dict[str, str] = self._load_env()
-        self.strategy_md: str = (self.root / "STRATEGY.md").read_text(encoding="utf-8")
+        self.strategy_md: str = self._inside_root(self.root / "STRATEGY.md").read_text(encoding="utf-8")
         self.claude_md: str = self._read_optional("CLAUDE.md")
         self.signals_dir = self._ensure_dir("signals")
         self.tasks_dir = self._ensure_dir("tasks")
@@ -55,13 +55,33 @@ class TenantContext:
                 f"Invalid tenant name '{name}' — must be a plain folder name "
                 f"directly under {CLIENTS_ROOT}, no path separators or '..'."
             )
-        candidate = (CLIENTS_ROOT / name).resolve()
+        raw = CLIENTS_ROOT / name
+        candidate = raw.resolve()
         clients_root_resolved = CLIENTS_ROOT.resolve()
         if clients_root_resolved not in candidate.parents:
             raise TenantConfigError(
                 f"Tenant '{name}' resolves outside {CLIENTS_ROOT} — refusing."
             )
+        # Exact, case-sensitive match on the real directory entry. Windows and
+        # macOS are case-insensitive and Windows strips trailing dots/spaces,
+        # so 'good', 'Good.' and 'Good ' would all alias the tenant 'Good'.
+        # A symlinked tenant dir could alias another tenant entirely.
+        if candidate.name != name or raw.is_symlink():
+            raise TenantConfigError(
+                f"Tenant '{name}' must match the folder name exactly "
+                "(case-sensitive, no symlinks) — refusing."
+            )
         return candidate
+
+    def _inside_root(self, path: Path) -> Path:
+        """Refuse symlinks / anything resolving outside this tenant's folder, so a
+        planted STRATEGY.md -> ~/.ssh/id_rsa can't be read into prompts or reports."""
+        if path.is_symlink() or (path.exists() and self.root not in path.resolve().parents):
+            raise TenantConfigError(
+                f"Tenant '{self.name}': '{path.name}' is a symlink or resolves outside "
+                "the tenant folder — refusing."
+            )
+        return path
 
     def _validate(self) -> None:
         if not self.root.is_dir():
@@ -78,7 +98,7 @@ class TenantContext:
             )
 
     def _load_env(self) -> dict[str, str]:
-        values = dotenv_values(self.root / ".env")
+        values = dotenv_values(self._inside_root(self.root / ".env"))
         clean = {k: v for k, v in values.items() if v}
         if not clean:
             raise TenantConfigError(
@@ -87,11 +107,11 @@ class TenantContext:
         return clean
 
     def _read_optional(self, filename: str) -> str:
-        path = self.root / filename
+        path = self._inside_root(self.root / filename)
         return path.read_text(encoding="utf-8") if path.exists() else ""
 
     def _ensure_dir(self, subpath: str) -> Path:
-        path = self.root / subpath
+        path = self._inside_root(self.root / subpath)
         path.mkdir(parents=True, exist_ok=True)
         return path
 

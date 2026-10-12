@@ -29,6 +29,7 @@ import requests
 
 from root_bus import read_signals, mark_signal_linked, write_task, append_root_log, get_operator_name
 from telegram import send_message, TelegramConfigError
+from utils import sanitize_text
 
 from paths import DOMAIN_WORKSPACE  # noqa: E402
 DOMAIN_ROOT = DOMAIN_WORKSPACE / "lead-qualify"
@@ -165,9 +166,9 @@ def run() -> int:
 
     for signal in pending:
         result = _score_lead(signal)
-        name = signal.get("name", "Unknown Lead")
-        company = signal.get("company", "Unknown Company")
-        source = signal.get("source", "unknown")
+        name = sanitize_text(signal.get("name", "Unknown Lead"), 80)
+        company = sanitize_text(signal.get("company", "Unknown Company"), 80)
+        source = sanitize_text(signal.get("source", "unknown"), 40)
         now = datetime.datetime.now()
 
         if result["tier"] == "COLD":
@@ -208,7 +209,7 @@ def run() -> int:
             hot_count += 1
             alert_text = (
                 f"🔥 HOT LEAD: {name} @ {company} | Score: {result['total']}/100 | "
-                f"Source: {source} | Message: {_extract_summary(signal['_body'])[:50]}"
+                f"Source: {source} | Message: {sanitize_text(_extract_summary(signal['_body']), 50)}"
             )
             try:
                 send_message(alert_text)

@@ -22,12 +22,13 @@ from __future__ import annotations
 
 import datetime
 import json
+import math
 import sys
 from pathlib import Path
 from typing import Any
 
 from tenant import TenantContext, TenantConfigError
-from utils import append_log
+from utils import append_log, sanitize_text
 
 GRAPH_API_VERSION = "v21.0"
 MAX_BUDGET_CHANGE_PCT = 0.20  # rule 3: respect learning
@@ -76,7 +77,13 @@ def _google_client(tenant: TenantContext):
     try:
         return GoogleAdsClient.load_from_dict(config)
     except (ValueError, KeyError, *_google_errors()) as exc:
-        raise LiveFetchError(f"Google Ads client init failed: {exc}") from exc
+        raise LiveFetchError(f"Google Ads client init failed: {_gerr(tenant, exc)}") from exc
+
+
+def _gerr(tenant: TenantContext, exc: Exception) -> str:
+    """Google exception text with this tenant's credentials scrubbed."""
+    return _safe_error(exc, *(tenant.env.get(k, "") for k in (
+        "GOOGLE_ADS_CLIENT_SECRET", "GOOGLE_ADS_REFRESH_TOKEN", "GOOGLE_ADS_DEVELOPER_TOKEN")))
 
 
 def _google_errors() -> tuple[type[Exception], ...]:
@@ -111,14 +118,14 @@ def _google_fetch_campaigns(tenant: TenantContext) -> dict[str, dict]:
         )
         rows = list(response)
     except _google_errors() as exc:
-        raise LiveFetchError(f"Google Ads API error: {exc}") from exc
+        raise LiveFetchError(f"Google Ads API error: {_gerr(tenant, exc)}") from exc
 
     campaigns: dict[str, dict] = {}
     for row in rows:
         cid = str(row.campaign.id)
         if cid not in campaigns:
             campaigns[cid] = {
-                "id": cid, "name": row.campaign.name,
+                "id": cid, "name": sanitize_text(row.campaign.name),
                 "status": row.campaign.status.name,
                 "budget": row.campaign_budget.amount_micros / 1_000_000,
                 "platform": "google",
@@ -147,7 +154,7 @@ def _google_pause_campaign(tenant: TenantContext, campaign_id: str) -> tuple[boo
         response = campaign_service.mutate_campaigns(
             customer_id=customer_id, operations=[operation])
     except _google_errors() as exc:
-        return False, f"Failed to pause Google Ads campaign {campaign_id}: {exc}"
+        return False, f"Failed to pause Google Ads campaign {campaign_id}: {_gerr(tenant, exc)}"
     return True, f"Google Ads campaign {campaign_id} paused: {response.results[0].resource_name}"
 
 
@@ -164,7 +171,7 @@ def _google_update_budget(tenant: TenantContext, campaign_id: str,
                    f"WHERE campaign.id = {int(campaign_id)}"),
         ))
     except (*_google_errors(), ValueError) as exc:
-        return False, f"Could not look up campaign {campaign_id}: {exc}"
+        return False, f"Could not look up campaign {campaign_id}: {_gerr(tenant, exc)}"
     if not found or not found[0].campaign.campaign_budget:
         return False, f"Campaign {campaign_id} not found or has no budget."
 
@@ -179,7 +186,7 @@ def _google_update_budget(tenant: TenantContext, campaign_id: str,
         result = budget_service.mutate_campaign_budgets(
             customer_id=customer_id, operations=[operation])
     except _google_errors() as exc:
-        return False, f"Failed to update budget: {exc}"
+        return False, f"Failed to update budget: {_gerr(tenant, exc)}"
     return True, f"Google Ads budget updated to {new_budget:.2f}: {result.results[0].resource_name}"
 
 
@@ -218,7 +225,7 @@ def _meta_fetch_campaigns(tenant: TenantContext) -> dict[str, dict]:
     for row in data.get("data", []):
         budget_cents = row.get("daily_budget") or row.get("lifetime_budget") or "0"
         campaigns[row["id"]] = {
-            "id": row["id"], "name": row["name"], "status": row["status"],
+            "id": row["id"], "name": sanitize_text(row["name"]), "status": row["status"],
             "budget": int(budget_cents) / 100, "platform": "meta",
             "impressions": 0, "clicks": 0, "cost": 0.0, "conversions": 0.0,
         }
@@ -549,6 +556,12 @@ def _cmd_budget(tenant: TenantContext, campaigns: dict[str, dict],
     except (TypeError, ValueError):
         print(f"ERROR: --new-budget must be a number, got '{new_budget_raw}'.", file=sys.stderr)
         return 2
+    # float("nan") parses fine and `nan > cap` is False, which would silently
+    # bypass the cap; inf/negative/zero are never a valid daily budget either.
+    if not math.isfinite(new_budget) or new_budget <= 0:
+        print(f"ERROR: --new-budget must be a finite number > 0, got '{new_budget_raw}'.",
+              file=sys.stderr)
+        return 2
 
     if campaign_key not in campaigns:
         available = ", ".join(sorted(campaigns.keys()))
@@ -565,7 +578,14 @@ def _cmd_budget(tenant: TenantContext, campaigns: dict[str, dict],
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
     baseline = budget_baseline(ledger, campaign_key, current)
-    change_pct = abs(new_budget - baseline) / baseline if baseline else 0
+    if baseline <= 0:
+        # No known starting budget (e.g. budget lives on ad sets, or lifetime
+        # budget): the 20% cap cannot be evaluated, so fail closed.
+        print(f"ERROR: campaign '{c['name']}' reports no campaign-level budget ({baseline:.2f}); "
+              "the cumulative cap cannot be verified. Change it in the ad platform UI.",
+              file=sys.stderr)
+        return 2
+    change_pct = abs(new_budget - baseline) / baseline
 
     # Show the exact change BEFORE executing
     print(f"⚠️  ABOUT TO CHANGE BUDGET: {platform} campaign '{c['name']}' (ID: {cid})")
@@ -574,7 +594,7 @@ def _cmd_budget(tenant: TenantContext, campaigns: dict[str, dict],
     print(f"   Change: {new_budget - current:+.2f}")
     if baseline != current:
         print(f"   {BUDGET_WINDOW_DAYS}-day baseline: {baseline:.2f} (earlier changes in the window count)")
-    print(f"   Cumulative vs baseline: {(new_budget - baseline) / baseline * 100 if baseline else 0:+.1f}%")
+    print(f"   Cumulative vs baseline: {(new_budget - baseline) / baseline * 100:+.1f}%")
 
     if change_pct > MAX_BUDGET_CHANGE_PCT:
         print(f"\n   ❌ BLOCKED: cumulative change is {change_pct * 100:.1f}% — exceeds the "

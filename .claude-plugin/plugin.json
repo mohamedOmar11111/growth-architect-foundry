@@ -8,10 +8,5 @@
   "license": "MIT",
   "keywords": ["marketing", "ads", "google-ads", "meta-ads", "agency", "arabic", "mena"],
   "skills": "./skills/",
-  "commands": "./commands/",
-  "agents": [
-    "./01_Context_Vault/Agents/marketing/marketing-social-media-strategist.md",
-    "./01_Context_Vault/Agents/marketing/marketing-content-creator.md",
-    "./01_Context_Vault/Agents/marketing/marketing-growth-hacker.md"
-  ]
+  "commands": "./commands/"
 }

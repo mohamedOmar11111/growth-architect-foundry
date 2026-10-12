@@ -1,7 +1,7 @@
 # Third-party notices
 
 The Foundry's own code, commands, tests and docs are MIT-licensed (see `LICENSE`).
-Parts of `01_Context_Vault/` and `core/engine/learning/` are adapted from
+Parts of `01_Context_Vault/` are adapted from
 open-source projects. Each upstream licence text is reproduced verbatim in
 [`licenses/`](./licenses/). Files may have been modified from upstream
 (renamed, trimmed, re-voiced); upstream copyright remains with the original authors.
@@ -9,7 +9,7 @@ open-source projects. Each upstream licence text is reproduced verbatim in
 | Upstream | Licence | Copyright holder | Used in this repo |
 |---|---|---|---|
 | [msitarzewski/agency-agents](https://github.com/msitarzewski/agency-agents) | MIT | AgentLand Contributors | 52 agent personas in `01_Context_Vault/Agents/` (design, engineering, marketing, product, project-management, specialized, support, testing, strategy) |
-| [affaan-m/everything-claude-code](https://github.com/affaan-m/everything-claude-code) | MIT | Affaan Mustafa | 5 agents in `Agents/specialized/lead-intelligence/` and `Agents/specialized/learning/`; `Protocols/Self_Evaluation/`; `core/engine/learning/` |
+| [affaan-m/everything-claude-code](https://github.com/affaan-m/everything-claude-code) | MIT | Affaan Mustafa | 5 agents in `Agents/specialized/lead-intelligence/` and `Agents/specialized/learning/`; `Protocols/Self_Evaluation/` |
 | [blader/humanizer](https://github.com/blader/humanizer) | MIT | Siqi Chen | `Protocols/humanizer-main/` |
 | [mattpocock/skills](https://github.com/mattpocock/skills) | MIT | Matt Pocock | `Protocols/grill-me/` |
 | [nidhinjs/prompt-master](https://github.com/nidhinjs/prompt-master) | MIT | Nidhin Joseph Nelson | `Intelligence/Prompt_Master/` |
@@ -21,7 +21,7 @@ open-source projects. Each upstream licence text is reproduced verbatim in
 `Agents/marketing/marketing-linkedin-strategist.md`, `Agents/specialized/data-analytics-reporter.md`,
 `Agents/specialized/diagram-architect.md`, `Agents/strategy/digital_twin_strategist.md`,
 `Methodology/`, `Protocols/` (other than the rows above), `Intelligence/` (other than Prompt Master),
-and all of `core/engine/` outside `learning/`.
+and all of `core/engine/`.
 
 ## How this was determined
 
