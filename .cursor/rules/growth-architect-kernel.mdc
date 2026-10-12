@@ -1,0 +1,63 @@
+---
+description: Growth Architect Kernel — pre-run protocol for every request in this repo
+globs:
+alwaysApply: true
+---
+
+You are operating inside the Growth Architect Kernel (The Foundry). This
+repo has its own field manual — follow it exactly, the same way
+AGENTS.md Section 0 instructs any agent to, Claude Code included.
+
+## Before doing anything
+
+1. Read `CLAUDE.md` at the repo root — the constitution (business context,
+   voice rules, prime directive).
+2. Read `AGENTS.md` — the field manual (loop governance, maker/checker
+   split, escalation rules).
+3. Read `architecture.md` — the exact schemas for `signals/` and `tasks/`.
+   Never write either without matching these schemas exactly.
+4. If the request concerns one specific loop (`command-chase`,
+   `ad-intel`, `content-engine`, `lead-qualify`, `grow-edge-sessions`),
+   read that loop's contract at `domain/<loop>/README.md` before acting.
+5. If the request concerns one specific client/tenant, read that tenant's
+   `CLAUDE.md`/`STRATEGY.md` under `02_Active_Clients/<tenant>/` — see
+   `02_Active_Clients/Aurora_Skincare/` for what a complete tenant folder
+   looks like (fictional reference tenant, safe to run against).
+6. Read the last ~10-30 lines of `log.md` at the repo root for recent
+   run history before proposing new work.
+
+## Hard rules (same as AGENTS.md Section 9)
+
+- Never send a real message, publish content, or execute a live platform
+  change — draft only, the operator approves everything.
+- Never write to `signals/` or `tasks/` without matching architecture.md's
+  schema exactly.
+- Never invent client/tenant context — read the actual files under
+  `02_Active_Clients/<tenant>/` instead of guessing.
+- Maker/checker split on anything non-trivial: if you drafted it, a
+  separate pass (not the same continuation) should review it before it's
+  treated as done.
+
+## Running the Python kernel from Cursor's terminal
+
+The actual state/scheduling engine is Python, not something Cursor's chat
+does for you — same as it isn't something Claude Code's chat does for you
+either. Run it directly:
+
+```
+cd core/engine
+python run_loop.py content-engine --client Aurora_Skincare   # tenant-bus loop
+python run_loop.py lead-qualify                               # root-bus loop, no --client
+```
+
+If there's no Claude Code/Cursor-equivalent agent available at all — e.g.
+running headless, or from a plain terminal with just an API key — use
+`agent_shim.py` instead, which calls Anthropic/OpenAI/Gemini directly over
+REST using whichever key is set in the root `.env`:
+
+```
+python core/engine/agent_shim.py content-engine --task "Draft a brief from today's ad-intel signals"
+```
+
+See `core/engine/agent_shim.py`'s module docstring for exactly what it does
+and doesn't do (drafts only, never writes signals/tasks directly).

@@ -1,0 +1,32 @@
+name: Kernel-Guard
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  verify-engine:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        
+    - name: Initialize Brain
+      run: python scripts/seed_db.py
+
+    - name: Verify Kernel Roster
+      run: python scripts/tests/verify_engine.py
+
+    - name: Install engine dependencies
+      run: pip install pyyaml==6.0.3 requests==2.34.2 python-dotenv==1.2.3 google-ads==31.4.0
+
+    - name: Smoke Test — proves the kernel actually runs, not just imports
+      run: python scripts/smoke_test.py

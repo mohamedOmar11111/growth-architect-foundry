@@ -1,0 +1,47 @@
+# Growth Architect Foundry
+
+> Multi-tenant agency growth engine with 23 deterministic commands. Not prompts pretending to be software.
+
+## What it is
+A Claude Code plugin and standalone CLI for marketing agencies. One kernel, unlimited clients. Every command is deterministic Python — same input, same output, every time. No LLM calls in the command layer; judgment work stays in the AI interface (skills and agents).
+
+## Commands (23)
+Account: `audit`, `diagnose`, `report` (EN/AR)
+Economics: `calc breakeven`, `calc cod`, `calc learning`, `calc vat`
+Campaigns: `list`, `status`, `compare`
+Content: `pipeline`, `calendar`
+Tracking: `check`, `events`
+Leads: `score`
+Creative: `hooks`, `angles`
+Competitive: `audit`
+Seasonal: `plan`
+Forecast: `project`
+Ops: `status`, `cadence`
+Tenants: `list`
+
+## Installation
+Claude Code: `/plugin install growth-architect-foundry@growth-architect-foundry`
+Manual: `./scripts/install.sh --dir ~/.claude/skills`
+Standalone: `python foundry.py account audit --client Aurora_Skincare`
+
+## Safety
+- Read-only by default on live accounts
+- Maker/checker: no auto-send, no auto-publish, no auto-commit
+- Every finding labeled confirmed-by-data or hypothesis
+- Money figures from deterministic calc.py, not from AI guessing
+- Multi-tenant: each client's .env and secrets isolated per-folder
+
+## Token budget
+~800 tokens/session for the router skill. Deep references load lazily per command.
+
+## Links
+- Repository: https://github.com/mohamedOmar11111/growth-architect-foundry
+- License: MIT
+- Author: Mohamed Omar (@mohamedOmar11111)
+
+## Skills
+- [growth-architect-foundry](skills/foundry-commands/SKILL.md) — the main router and command reference
+- [diagram-design](01_Context_Vault/Skills/diagram-design/SKILL.md) — 38 HTML/SVG diagram primitives
+
+## Agents (67)
+Full roster in [01_Context_Vault/Agents/](01_Context_Vault/Agents/) — marketing, engineering, design, product, testing, support, and specialized squads including the social media team.

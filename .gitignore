@@ -1,0 +1,31 @@
+# Secrets — never commit real credentials. Only *.env.example files are tracked.
+.env
+*.env
+!*.env.example
+!templates/.env.example
+
+# Per-tenant secrets (each tenant folder gets its own .env — never tracked)
+02_Active_Clients/*/.env
+
+# NOTE: log.md, signals/, tasks/, domain/*/drafts/, 02_Active_Clients/*/02_Content/
+# and .../04_Reports/ are deliberately NOT ignored — per AGENTS.md this kernel
+# uses git itself as the accumulating audit trail (read log.md before every
+# run, escalate via signals/, etc). Only credentials get excluded.
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+
+# SQLite runtime artifacts (hq.db itself IS tracked as seed data — ignore WAL/journal only)
+hq.db-journal
+hq.db-wal
+hq.db-shm
+
+# OS/editor cruft
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

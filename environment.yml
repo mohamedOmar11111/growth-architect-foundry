@@ -1,0 +1,15 @@
+name: growth-architect
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.11
+  - pandas=3.0.5
+  - streamlit=1.62.0
+  - pip
+  - pyyaml=6.0.3
+  - requests=2.34.2
+  - pytest=9.0.3
+  - pip:
+    - python-dotenv==1.2.3
+    - google-ads==31.4.0

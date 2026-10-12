@@ -1,0 +1,50 @@
+name: Anaconda-Environment-Check
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  anaconda-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        # Required by conda-incubator/setup-miniconda for the activated
+        # environment to actually be on PATH in later steps — without this,
+        # every `run:` step below silently falls back to the runner's system
+        # Python, not the growth-architect conda env. seed_db.py/
+        # verify_engine.py only use stdlib so they never surfaced this; the
+        # import smoke test below is what actually caught it.
+        shell: bash -l {0}
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Setup Miniconda
+      uses: conda-incubator/setup-miniconda@v3
+      with:
+        activate-environment: growth-architect
+        environment-file: environment.yml
+        python-version: '3.11'
+        auto-activate-base: false
+        
+    - name: Verify Environment
+      run: |
+        conda info
+        conda list
+        python --version
+        
+    - name: Run Kernel Seed Test
+      run: |
+        python scripts/seed_db.py
+        python scripts/tests/verify_engine.py
+
+    - name: Import Smoke Test — every engine module actually imports
+      run: |
+        cd core/engine
+        python -c "
+        import root_bus, tenant, signals, tasks, telegram, utils
+        import loops.ad_intel, loops.content_engine, loops.lead_qualify
+        print('All engine modules imported cleanly.')
+        "

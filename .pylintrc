@@ -1,0 +1,19 @@
+[MASTER]
+ignore=venv,tests
+ignored-modules=streamlit,pandas,google.ads,dotenv,yaml,requests
+
+[MESSAGES CONTROL]
+# Disable all stylistic and non-critical logic checks
+# We only care if the code will CRASH (Fatal/Errors)
+disable=
+    all
+
+enable=
+    F, # Fatal
+    E, # Error
+    unreachable,
+    duplicate-key
+
+[REPORTS]
+output-format=colorized
+score=yes

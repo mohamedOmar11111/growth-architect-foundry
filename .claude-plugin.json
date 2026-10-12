@@ -1,0 +1,26 @@
+{
+  "name": "growth-architect-foundry",
+  "version": "1.0.0",
+  "description": "The multi-agent growth kernel for agencies — 23 deterministic commands, multi-tenant engine, maker/checker safety. Not prompts pretending to be software.",
+  "author": "Mohamed Omar (@mohamedOmar11111)",
+  "license": "MIT",
+  "homepage": "https://github.com/mohamedOmar11111/growth-architect-foundry",
+  "skills": [
+    {
+      "name": "growth-architect-foundry",
+      "description": "Multi-tenant agency growth engine with 23 deterministic commands: audit accounts, diagnose bottlenecks, generate client reports (EN/AR), run media math, manage campaigns, track content pipelines, score leads, plan seasons, and more. Trigger on: foundry, audit, diagnose, report, campaign, content, tracking, leads, creative, competitive, season, forecast, tenants, calc, media buying, ad account, client report, growth engine, محرك النمو, تدقيق, تشخيص, تقرير, حملات, محتوى, تتبّع",
+      "file": "skills/foundry-commands/SKILL.md"
+    }
+  ],
+  "agents": [
+    "01_Context_Vault/Agents/marketing/marketing-social-media-strategist.md",
+    "01_Context_Vault/Agents/marketing/marketing-content-creator.md",
+    "01_Context_Vault/Agents/marketing/marketing-growth-hacker.md"
+  ],
+  "token_budget": 800,
+  "security": {
+    "read_only_by_default": true,
+    "write_requires_approval": true,
+    "no_auto_publish": true
+  }
+}
