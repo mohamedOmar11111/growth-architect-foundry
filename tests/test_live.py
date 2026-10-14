@@ -55,6 +55,7 @@ def test_repeated_steps_cannot_compound_past_cap(tmp_path):
     tenant = make_tenant(tmp_path, META_ENV)
     campaigns = {"meta:1": {"name": "c", "budget": 100.0, "platform": "meta"}}
     with patch.object(live, "_meta_update_budget", return_value=(True, "ok")), \
+         patch.object(live, "_human_approved", return_value=True), \
          patch.object(live, "append_log"):
         assert live._cmd_budget(tenant, campaigns, {"campaign_id": "meta:1", "new_budget": 120, "confirm": True}) == 0
         campaigns["meta:1"]["budget"] = 120.0           # account now reflects step 1
@@ -212,6 +213,7 @@ def test_pause_confirm_gate_and_success(tmp_path):
     tenant = make_tenant(tmp_path, META_ENV)
     campaigns = {"meta:1": {"name": "c", "status": "ACTIVE", "cost": 1.0, "conversions": 0, "platform": "meta"}}
     with patch.object(live, "_meta_pause_campaign", return_value=(True, "ok")) as pause, \
+         patch.object(live, "_human_approved", return_value=True), \
          patch.object(live, "append_log"):
         assert live._cmd_pause(tenant, campaigns, {"campaign_id": "meta:1"}) == 0
         pause.assert_not_called()
