@@ -67,7 +67,8 @@ Never auto-approve `live pause` or `live budget`.
 ### Live ad-account safety
 
 - Failed API calls are reported as **FETCH FAILED** and exit non-zero, never as "no campaigns".
-- Writes (`live pause`, `live budget`) need `--confirm`, are refused if any platform fetch failed,
+- Writes (`live pause`, `live budget`) need `--confirm` **and a person typing the campaign key at a real terminal**
+  (agent shells have none, so they exit 3 "refused" in every agent), are refused if any platform fetch failed,
   and budget changes are capped at **20% cumulative per campaign per 7 days** (ledger in the tenant's `04_Reports/`).
 - Agency accounts: set `GOOGLE_ADS_LOGIN_CUSTOMER_ID` (manager account) in the tenant `.env`.
 

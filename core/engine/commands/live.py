@@ -7,9 +7,10 @@ APIs. Every other command reads from files on disk — this one reads from
 Safety model (non-negotiable):
   - READ verbs (pull, optimize): fail loud if a configured platform's API call
     fails — a failed pull is NEVER reported as "no campaigns". Never modify.
-  - WRITE verbs (pause, budget): require --confirm. The exact change is printed
-    BEFORE the write happens. No --confirm = no write, full stop. A write is
-    refused outright if any platform's fetch failed (stale/partial state).
+  - WRITE verbs (pause, budget): require --confirm AND a person typing the
+    campaign key at an interactive terminal (an AI agent's shell has none, so
+    it cannot self-approve). The exact change is printed BEFORE the write. A
+    write is refused outright if any platform's fetch failed (stale/partial).
   - Budget changes are capped at 20% CUMULATIVE per campaign over a rolling
     7-day window (ledger in the tenant's 04_Reports/), so repeated small
     steps cannot compound past the learning-phase guardrail.
@@ -32,6 +33,7 @@ from utils import append_log, sanitize_text
 
 GRAPH_API_VERSION = "v21.0"
 MAX_BUDGET_CHANGE_PCT = 0.20  # rule 3: respect learning
+EXIT_REFUSED = 3  # a safety gate refused the action (distinct from failure=1, bad input=2)
 BUDGET_WINDOW_DAYS = 7
 LEDGER_NAME = "budget-ledger.json"
 
@@ -39,6 +41,31 @@ GOOGLE_KEYS = ("GOOGLE_ADS_CLIENT_ID", "GOOGLE_ADS_CLIENT_SECRET",
                "GOOGLE_ADS_REFRESH_TOKEN", "GOOGLE_ADS_DEVELOPER_TOKEN",
                "GOOGLE_ADS_CUSTOMER_ID")
 META_KEYS = ("META_ACCESS_TOKEN", "META_AD_ACCOUNT_ID")
+
+
+def _human_approved(target: str) -> bool:
+    """Live writes need a person at a terminal, whatever agent launched this.
+
+    --confirm is just a flag, so a prompt-injected agent can add it. Agent
+    tool shells run commands without a terminal, so requiring a typed answer
+    on a real TTY means the user must run the write themselves. Limit: an
+    agent that attaches a pseudo-terminal could still answer; keep agent
+    permission prompts on for these commands too.
+    """
+    if not (sys.stdin.isatty() and sys.stdout.isatty()):
+        print("\n   REFUSED: live writes must be approved by a person at a terminal.\n"
+              "   This command was not run from an interactive terminal (an AI agent's\n"
+              "   shell is not one). Run the same command yourself in a terminal.",
+              file=sys.stderr)
+        return False
+    try:
+        typed = input(f"   Type the campaign key '{target}' to apply this change: ").strip()
+    except EOFError:
+        return False
+    if typed != target:
+        print("   Approval text did not match. No changes made.", file=sys.stderr)
+        return False
+    return True
 
 
 class LiveFetchError(RuntimeError):
@@ -524,6 +551,8 @@ def _cmd_pause(tenant: TenantContext, campaigns: dict[str, dict],
         print("\n   No --confirm flag passed. No changes made.")
         print("   To execute: add --confirm to the command.")
         return 0
+    if not _human_approved(campaign_key):
+        return EXIT_REFUSED
 
     if platform == "google":
         ok, msg = _google_pause_campaign(tenant, cid)
@@ -607,6 +636,8 @@ def _cmd_budget(tenant: TenantContext, campaigns: dict[str, dict],
         print("\n   No --confirm flag passed. No changes made.")
         print("   To execute: add --confirm to the command.")
         return 0
+    if not _human_approved(campaign_key):
+        return EXIT_REFUSED
 
     if platform == "google":
         ok, msg = _google_update_budget(tenant, cid, new_budget)

@@ -63,7 +63,7 @@ All commands run via `python "<home>/foundry.py" <group> <verb> [--client <tenan
 
 **Workspace:** run from the user's own project folder (or set `FOUNDRY_WORKSPACE`). Tenants, `log.md`, `signals/` and `tasks/` live THERE, never in the plugin folder. First time: `setup doctor`, then `setup init --client <Name>`.
 
-**Failure rule:** a `FETCH FAILED` line from `live` means the API call failed — never describe it as "no campaigns". Writes (`pause`, `budget`) need explicit user approval of the exact change, then `--confirm`. Budget changes are capped at 20% cumulative per campaign per 7 days.
+**Failure rule:** a `FETCH FAILED` line from `live` means the API call failed — never describe it as "no campaigns". Writes (`pause`, `budget`) are enforced in code: they need `--confirm` AND the user typing the campaign key at a real terminal, so an agent cannot complete them (exit code 3 = refused). Preview with the command without `--confirm`, show the user the exact change, and give them the full command to run themselves. Budget changes are capped at 20% cumulative per campaign per 7 days.
 Reports write to `04_Reports/` and append to `log.md`.
 
 ### Account (deterministic, no LLM)
@@ -105,7 +105,7 @@ Reports write to `04_Reports/` and append to `log.md`.
 |---|---|---|
 | `foundry live pull --client <t>` | Read | Pull live campaign data from Google Ads + Meta |
 | `foundry live optimize --client <t> [--target-cpa <v>]` | Read | Scale/hold/reduce/kill recommendations with numbers |
-| `foundry live pause --client <t> --campaign-id google:123 --confirm` | **Write** | Pause a campaign (--confirm required) |
+| `foundry live pause --client <t> --campaign-id google:123 --confirm` | **Write** | Pause a campaign (--confirm + human types key at a terminal) |
 | `foundry live budget --client <t> --campaign-id meta:456 --new-budget 500 --confirm` | **Write** | Adjust budget (max 20% change, --confirm required) |
 
 Campaign IDs use `platform:id` format (e.g., `google:12345678`, `meta:23456789`). The `live pull` command outputs these keys.

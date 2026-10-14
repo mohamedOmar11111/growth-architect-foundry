@@ -10,7 +10,7 @@ Load this file ONLY when a `live` command is being executed or explained.
 - If no creds configured, output says "no campaigns found" — not a crash.
 
 ### Write verbs (pause, budget)
-- **Require `--confirm` flag.** Without it, the exact change is printed and nothing happens.
+- **Require `--confirm` AND a human at a terminal.** Without `--confirm` the exact change is printed and nothing happens. With it, the user must type the campaign key at an interactive terminal; non-interactive runs (an AI agent's shell) exit 3 "refused". Agents preview and hand the user the command; they never run the write.
 - The exact change is shown BEFORE execution — campaign name, current status/budget, proposed change.
 - Budget changes capped at **20% per action** (rule 3: respect learning). Attempting a larger change is blocked, not clamped.
 - Every write appends to `log.md` with the exact change made.
