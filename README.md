@@ -51,6 +51,22 @@ follows those conventions.
 `install_agent.py --scope user` installs the skill for every project. It copies files (no symlinks, works on
 Windows) and writes the Foundry path into the installed skill, so the agent knows where `foundry.py` is.
 
+**Support status** (what is actually tested, not just claimed):
+
+| Agent | L0 discovered | L1 runs a command | L2 live writes blocked | Evidence |
+|---|---|---|---|---|
+| Claude Code | yes | yes | yes | `claude plugin validate`, manual runs |
+| OpenCode | yes | not yet | yes (code gate) | nightly `agent-conformance` job |
+| Gemini CLI | yes | not yet | yes (code gate) | nightly `agent-conformance` job |
+| Freebuff / Codebuff | docs only | not yet | yes (code gate) | not installed in CI |
+| Codex, Cursor, others | via `AGENTS.md` | not yet | yes (code gate) | not tested |
+
+L2 is enforced by Foundry itself (a typed approval on a real terminal), so it holds in any agent.
+L1 (a model actually running `foundry` end to end) has not been tested in the non-Claude agents.
+
+**Pin Gemini installs** to a release so auto-update does not track `master`:
+`gemini extensions install https://github.com/mohamedOmar11111/growth-architect-foundry --ref v1.3.0`
+
 **Keep live writes behind a prompt.** Other agents have no per-command allowlist, so set one yourself. OpenCode
 (`opencode.json`, last matching rule wins):
 

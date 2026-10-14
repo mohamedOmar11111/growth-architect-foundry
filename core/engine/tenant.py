@@ -13,6 +13,7 @@ multi-tenant mandate forbids.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from dotenv import dotenv_values
@@ -66,7 +67,10 @@ class TenantContext:
         # macOS are case-insensitive and Windows strips trailing dots/spaces,
         # so 'good', 'Good.' and 'Good ' would all alias the tenant 'Good'.
         # A symlinked tenant dir could alias another tenant entirely.
-        if candidate.name != name or raw.is_symlink():
+        # Path.resolve() canonicalises case on Windows but NOT on macOS, so compare
+        # against the real directory listing: an exact, case-sensitive string match.
+        exact = CLIENTS_ROOT.is_dir() and name in os.listdir(CLIENTS_ROOT)
+        if (CLIENTS_ROOT.is_dir() and not exact) or candidate.name != name or raw.is_symlink():
             raise TenantConfigError(
                 f"Tenant '{name}' must match the folder name exactly "
                 "(case-sensitive, no symlinks) — refusing."
