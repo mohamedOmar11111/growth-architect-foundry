@@ -56,7 +56,10 @@ If basics missing → one-message intake.
 
 ## Commands
 
-All commands run via `python "${CLAUDE_PLUGIN_ROOT}/foundry.py" <group> <verb> [--client <tenant>]` (when running from a clone, `python foundry.py ...`).
+Foundry home (the folder holding `foundry.py`): `@@FOUNDRY_HOME@@`
+If that value starts with `@@` the skill is being used in place: in Claude Code use `${CLAUDE_PLUGIN_ROOT}`, in any other agent use the folder two levels above this SKILL.md.
+
+All commands run via `python "<home>/foundry.py" <group> <verb> [--client <tenant>]` (`python3` on macOS/Linux).
 
 **Workspace:** run from the user's own project folder (or set `FOUNDRY_WORKSPACE`). Tenants, `log.md`, `signals/` and `tasks/` live THERE, never in the plugin folder. First time: `setup doctor`, then `setup init --client <Name>`.
 
@@ -146,10 +149,13 @@ Use this skill when the user mentions:
 ```bash
 # Claude Code plugin
 /plugin marketplace add mohamedOmar11111/growth-architect-foundry
-/plugin install growth-architect-foundry@growth-architect-foundry
+/plugin install foundry@growth-architect-foundry
 
-# Manual (any agent)
-./scripts/install.sh --dir ~/.claude/skills
+# OpenCode, Freebuff/Codebuff, Codex, Cursor (run from YOUR project folder)
+python <path-to-foundry>/scripts/install_agent.py
+
+# Gemini CLI
+gemini extensions install https://github.com/mohamedOmar11111/growth-architect-foundry
 
 # Standalone
 python foundry.py account audit --client Aurora_Skincare

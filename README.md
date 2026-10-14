@@ -34,14 +34,35 @@ is optional). Or just talk to Claude: "audit my account" / "راجع حسابي"
 Slash commands: `/foundry:init`, `doctor`, `audit`, `diagnose`, `report`, `live`.
 The full 23+ command surface is available through the skill.
 
-**Other interfaces:**
+### Works with any coding agent
 
-| You have | Use |
+One Agent Skill (`skills/growth-architect-foundry/`) plus one `AGENTS.md` cover every agent that
+follows those conventions.
+
+| Agent | Install |
 |---|---|
-| Claude Code | Plugin install above |
-| Cursor | `.cursor/rules/growth-architect-kernel.mdc` — already wired in |
-| Terminal | `python foundry.py account audit --client Aurora_Skincare` (run from your workspace, or set `FOUNDRY_WORKSPACE`) |
-| Just an API key | `python core/engine/agent_shim.py content-engine --task "..."` |
+| Claude Code | the plugin above |
+| OpenCode | from your project folder: `python <foundry>/scripts/install_agent.py` |
+| Freebuff / Codebuff | same installer (they read `.agents/skills/`) |
+| Gemini CLI | `gemini extensions install https://github.com/mohamedOmar11111/growth-architect-foundry` |
+| Codex, Cursor, others reading `AGENTS.md` | same installer (adds a managed block to your `AGENTS.md`; Cursor also has `.cursor/rules/`) |
+| Plain terminal / API key only | `python foundry.py account audit --client Aurora_Skincare`, or `python core/engine/agent_shim.py content-engine --task "..."` |
+
+`install_agent.py --scope user` installs the skill for every project. It copies files (no symlinks, works on
+Windows) and writes the Foundry path into the installed skill, so the agent knows where `foundry.py` is.
+
+**Keep live writes behind a prompt.** Other agents have no per-command allowlist, so set one yourself. OpenCode
+(`opencode.json`, last matching rule wins):
+
+```json
+{ "permission": { "bash": {
+    "*": "ask",
+    "*foundry.py account *": "allow",
+    "*foundry.py live pull*": "allow"
+} } }
+```
+
+Never auto-approve `live pause` or `live budget`.
 
 ### Live ad-account safety
 
@@ -91,7 +112,7 @@ The full 23+ command surface is available through the skill.
 | `foundry economics vat --budget 10000 --country SA` | — | VAT split by MENA country |
 
 ### Campaigns / Content / Tracking / Leads / Creative / Competitive / Seasonal / Forecast / Ops / Tenants
-14 more verbs covering campaign visibility, content pipeline, tracking readiness, lead scoring, creative hooks/angles, competitive positioning, MENA seasonal planning, budget forecasting, engine health, and multi-tenant management. See `skills/foundry-commands/SKILL.md` for the full roster.
+14 more verbs covering campaign visibility, content pipeline, tracking readiness, lead scoring, creative hooks/angles, competitive positioning, MENA seasonal planning, budget forecasting, engine health, and multi-tenant management. See `skills/growth-architect-foundry/SKILL.md` for the full roster.
 
 ---
 
