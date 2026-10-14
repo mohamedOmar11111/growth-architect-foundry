@@ -56,13 +56,13 @@ Windows) and writes the Foundry path into the installed skill, so the agent know
 | Agent | L0 discovered | L1 runs a command | L2 live writes blocked | Evidence |
 |---|---|---|---|---|
 | Claude Code | yes | yes | yes | `claude plugin validate`, manual runs |
-| OpenCode | yes | not yet | yes (code gate) | nightly `agent-conformance` job |
-| Gemini CLI | yes | not yet | yes (code gate) | nightly `agent-conformance` job |
+| OpenCode | yes | yes (1 manual run, free `big-pickle` model: loaded the skill, ran `account audit --json`, reported the score; given a live-write instruction it ran the command, hit missing credentials and handed the decision back) | yes (code gate) | nightly `agent-conformance` job + manual run 2026-10-14 |
+| Gemini CLI | yes | not tested (the test account got `IneligibleTierError`; needs an eligible account or API key) | yes (code gate) | nightly `agent-conformance` job |
 | Freebuff / Codebuff | docs only | not yet | yes (code gate) | not installed in CI |
 | Codex, Cursor, others | via `AGENTS.md` | not yet | yes (code gate) | not tested |
 
 L2 is enforced by Foundry itself (a typed approval on a real terminal), so it holds in any agent.
-L1 (a model actually running `foundry` end to end) has not been tested in the non-Claude agents.
+L1 means a model actually ran `foundry` end to end. One manual OpenCode run is evidence, not a guarantee: results vary by model, and no CI job exercises L1.
 
 **Pin Gemini installs** to a release so auto-update does not track `master`:
 `gemini extensions install https://github.com/mohamedOmar11111/growth-architect-foundry --ref v1.3.0`
