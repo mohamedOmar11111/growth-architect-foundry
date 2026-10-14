@@ -64,6 +64,9 @@ numbers belong to code. Reports write to 04_Reports/ and log.md.
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
+import json
 import sys
 from importlib import import_module
 from pathlib import Path
@@ -203,23 +206,66 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+# ── machine contract ───────────────────────────────────────────────────────
+# Exit codes: 0 ok · 1 failure · 2 bad input/usage · 3 refused by a safety gate.
+# With --json every command prints ONE JSON object (see _envelope). schema_version
+# bumps only on breaking changes to these keys.
+SCHEMA_VERSION = 1
+EXIT_OK, EXIT_FAILURE, EXIT_USAGE, EXIT_REFUSED = 0, 1, 2, 3
+
+
+def _envelope(command: str, code: int, out: str, err: str, data: object) -> dict:
+    """Stable result shape for agents. `data` is structured when the command has it
+    (audit, diagnose, live pull, economics); `output` is the human-readable text."""
+    try:
+        parsed = json.loads(out)
+    except ValueError:
+        parsed = None
+    report_path = None
+    for line in reversed(out.splitlines()):
+        if "written -> " in line:
+            report_path = line.split("written -> ", 1)[1].strip()
+            break
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "command": command,
+        "ok": code == EXIT_OK,
+        "exit_code": code,
+        "data": parsed if parsed is not None else data,
+        "output": None if parsed is not None else out,
+        "report_path": report_path,
+        "stderr": err or None,
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if not args.as_json:
+        return _execute(args, {})
 
+    out, err, extra = io.StringIO(), io.StringIO(), {}
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+        code = _execute(args, extra)
+    print(json.dumps(_envelope(f"{args.group} {args.verb}", code, out.getvalue(),
+                               err.getvalue(), extra.get("_data")), indent=2, default=str))
+    return code
+
+
+def _execute(args: argparse.Namespace, extra: dict) -> int:
     group = args.group
     verb = args.verb
     group_map = GROUPS.get(group)
     if group_map is None:
         print(f"ERROR: unknown group '{group}'", file=sys.stderr)
-        return 1
+        return EXIT_USAGE
 
     spec = group_map.get(verb)
     if spec is None:
         available = ", ".join(group_map)
         print(f"ERROR: unknown verb '{verb}' for group '{group}'. "
               f"Available: {available}", file=sys.stderr)
-        return 1
+        return EXIT_USAGE
 
     mod = _resolve_module(spec["module"])
 
@@ -227,10 +273,10 @@ def main(argv: list[str] | None = None) -> int:
     needs_tenant = spec.get("tenant", True)
     if needs_tenant and not args.client:
         print(f"ERROR: '{group} {verb}' requires --client.", file=sys.stderr)
-        return 1
+        return EXIT_USAGE
     if not needs_tenant and args.client and not spec.get("accepts_client"):
         print(f"ERROR: '{group} {verb}' does not accept --client.", file=sys.stderr)
-        return 1
+        return EXIT_USAGE
 
     # Build options dict for the command
     opts = {
@@ -246,6 +292,9 @@ def main(argv: list[str] | None = None) -> int:
     }
     for key in ECON_KEYS:
         opts[key] = getattr(args, key)
+    opts["_extra"] = extra  # commands put structured results in extra["_data"]
+    if group == "economics" and opts["confirm"] is False:
+        opts["confirm"] = None  # unset flag means "use the default rate", not 0%
 
     try:
         if needs_tenant:
@@ -263,7 +312,7 @@ def main(argv: list[str] | None = None) -> int:
             return mod.run(opts)
     except Exception as e:  # noqa: BLE001
         print(f"ERROR: {group} {verb} failed: {e}", file=sys.stderr)
-        return 1
+        return EXIT_FAILURE
 
 
 if __name__ == "__main__":

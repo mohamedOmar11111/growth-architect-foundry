@@ -274,6 +274,8 @@ def run(tenant: TenantContext, opts: dict | None = None) -> int:
     )
     report_path.write_text(report, encoding="utf-8")
 
+    if opts is not None:
+        opts.get("_extra", {})["_data"] = audit
     print(report)
     print(f"\n[{tenant.name}] audit: report written -> {report_path}")
     append_log(tenant.name, "audit",

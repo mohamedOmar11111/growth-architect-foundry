@@ -13,6 +13,8 @@ Workspace: the folder you are working in. Tenants (`02_Active_Clients/<Name>/`),
 Run (use `python3` on macOS/Linux): `python "<home>/foundry.py" <group> <verb> [--client <Name>]`
 - First time: `setup doctor`, then `setup init --client <Name>`.
 - Full command reference: load the Agent Skill `growth-architect-foundry`.
+- Add `--json` for one parseable object: `schema_version, command, ok, exit_code, data, output,
+  report_path, stderr`. Exit codes: 0 ok, 1 failed, 2 bad input, 3 refused by a safety gate.
 
 Rules:
 1. Reads are free. Live writes (`live pause`, `live budget`) are enforced in code: they need

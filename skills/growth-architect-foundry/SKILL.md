@@ -63,6 +63,8 @@ All commands run via `python "<home>/foundry.py" <group> <verb> [--client <tenan
 
 **Workspace:** run from the user's own project folder (or set `FOUNDRY_WORKSPACE`). Tenants, `log.md`, `signals/` and `tasks/` live THERE, never in the plugin folder. First time: `setup doctor`, then `setup init --client <Name>`.
 
+**Machine output:** add `--json` to any command for one object: `schema_version, command, ok, exit_code, data, output, report_path, stderr` (`data` is structured for audit, diagnose, live pull and economics). Exit codes: 0 ok, 1 failed, 2 bad input, 3 refused by a safety gate. Parse `data`/`ok`, not the prose.
+
 **Failure rule:** a `FETCH FAILED` line from `live` means the API call failed — never describe it as "no campaigns". Writes (`pause`, `budget`) are enforced in code: they need `--confirm` AND the user typing the campaign key at a real terminal, so an agent cannot complete them (exit code 3 = refused). Preview with the command without `--confirm`, show the user the exact change, and give them the full command to run themselves. Budget changes are capped at 20% cumulative per campaign per 7 days.
 Reports write to `04_Reports/` and append to `log.md`.
 

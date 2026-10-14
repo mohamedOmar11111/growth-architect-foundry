@@ -678,6 +678,7 @@ def run(tenant: TenantContext, opts: dict | None = None) -> int:
     if errors and not campaigns:
         return 1  # nothing usable fetched: don't render an "empty account" report
 
+    opts.setdefault("_extra", {})["_data"] = {"campaigns": campaigns, "fetch_errors": errors}
     code = _dispatch(tenant, verb, campaigns, opts)
     return 1 if errors and code == 0 else code
 
