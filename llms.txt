@@ -20,8 +20,9 @@ Ops: `status`, `cadence`
 Tenants: `list`
 
 ## Installation
-Claude Code: `/plugin install growth-architect-foundry@growth-architect-foundry`
-Manual: `./scripts/install.sh --dir ~/.claude/skills`
+Claude Code: `/plugin install foundry@growth-architect-foundry`
+OpenCode / Freebuff / Codex / Cursor: `python scripts/install_agent.py` (from your project folder)
+Gemini CLI: `gemini extensions install https://github.com/mohamedOmar11111/growth-architect-foundry`
 Standalone: `python foundry.py account audit --client Aurora_Skincare`
 
 ## Safety
@@ -40,7 +41,7 @@ Standalone: `python foundry.py account audit --client Aurora_Skincare`
 - Author: Mohamed Omar (@mohamedOmar11111)
 
 ## Skills
-- [growth-architect-foundry](skills/foundry-commands/SKILL.md) — the main router and command reference
+- [growth-architect-foundry](skills/growth-architect-foundry/SKILL.md) — the main router and command reference
 - [diagram-design](01_Context_Vault/Skills/diagram-design/SKILL.md) — 38 HTML/SVG diagram primitives
 
 ## Agents (67)

@@ -1,0 +1,6 @@
+{
+  "name": "foundry",
+  "version": "1.2.0",
+  "description": "Growth ops kernel for agencies: deterministic audit, diagnose, client reports (EN/AR), media math and guarded live Google/Meta operations.",
+  "contextFileName": "AGENTS.md"
+}

@@ -7,7 +7,7 @@
       "name": "foundry",
       "source": "./",
       "description": "Deterministic growth commands for agencies: audit, diagnose, report, media math, live Google/Meta ops with safety gates.",
-      "version": "1.1.0",
+      "version": "1.2.0",
       "category": "marketing",
       "keywords": ["ads", "agency", "google-ads", "meta-ads"]
     }
