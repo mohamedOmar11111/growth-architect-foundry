@@ -25,5 +25,5 @@ jobs:
       run: npm install -g opencode-ai @google/gemini-cli
     - name: Install Foundry deps
       run: python -m pip install -r requirements.txt
-    - name: Conformance (L0: discovery)
+    - name: Conformance (L0 discovery)
       run: python scripts/agent_conformance.py --require
