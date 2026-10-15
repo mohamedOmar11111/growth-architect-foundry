@@ -13,7 +13,7 @@ import datetime
 import re
 from pathlib import Path
 
-import yaml
+from envfile import yaml
 
 from tenant import TenantContext
 

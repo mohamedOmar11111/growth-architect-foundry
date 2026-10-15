@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.4.0
+- **ChatGPT:** Custom GPT pack (`scripts/build_chatgpt_pack.py`): offline engine zip, GPT instructions
+  (under the 8,000-character cap) and knowledge files. Runs in Code Interpreter with no network, so live
+  ad writes are impossible there.
+- **Standard-library only:** every read-only command now runs without python-dotenv, PyYAML, requests or
+  google-ads (`envfile.py` fallbacks; command modules import lazily). Tested with those imports blocked.
+- **Codex:** verified with the real CLI (`codex debug prompt-input` discovery check in CI; manual
+  `codex exec` run).
+- **Removed:** Gemini CLI extension (`gemini-extension.json`) and its docs/tests. Gemini remains an
+  optional LLM provider for `agent_shim.py`.
+
 ## 1.3.0
 - **Safety:** live writes (`live pause`, `live budget`) now need a person typing the campaign key at a
   real terminal, on top of `--confirm`. AI agent shells have no terminal, so they exit 3 ("refused")

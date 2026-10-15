@@ -82,11 +82,8 @@ from commands import COMMAND_MODULES  # noqa: E402
 # ── calc: standalone, no tenant ────────────────────────────────────────────
 from commands import calc_commands  # noqa: E402
 
-# ── additional command modules ─────────────────────────────────────────────
-from commands import (  # noqa: E402
-    campaigns, content, tracking, ops, tenants, creative,
-    leads, competitive, season, forecast, setup,
-)
+# Command modules are imported lazily by _resolve_module, so a minimal Python (no
+# PyYAML / requests / google-ads) can still run every read-only command.
 
 # ── Group → verb → module mapping ──────────────────────────────────────────
 # Each module exposes: run(tenant, opts) -> int   (tenant commands)

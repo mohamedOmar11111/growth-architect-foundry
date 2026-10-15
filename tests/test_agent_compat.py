@@ -1,5 +1,5 @@
 """Every agent integration must stay valid: Agent Skills spec (OpenCode, Codebuff/Freebuff,
-Gemini), Gemini extension manifest, and the cross-platform installer."""
+Codex), plugin manifests, and the cross-platform installer."""
 import importlib.util
 import json
 import re
@@ -34,14 +34,7 @@ def test_skill_follows_agent_skills_spec(skill):
 def test_versions_agree_across_plugin_formats():
     plugin = json.loads((ROOT / ".claude-plugin/plugin.json").read_text())
     market = json.loads((ROOT / ".claude-plugin/marketplace.json").read_text())
-    gemini = json.loads((ROOT / "gemini-extension.json").read_text())
-    assert plugin["version"] == market["plugins"][0]["version"] == gemini["version"]
-
-
-def test_gemini_manifest_is_valid():
-    gemini = json.loads((ROOT / "gemini-extension.json").read_text())
-    assert NAME_RE.match(gemini["name"])
-    assert (ROOT / gemini["contextFileName"]).is_file()
+    assert plugin["version"] == market["plugins"][0]["version"]
 
 
 def test_agents_md_has_one_managed_block_and_sentinel():

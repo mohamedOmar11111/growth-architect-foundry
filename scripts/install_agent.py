@@ -2,7 +2,6 @@
 
 Works for any agent that reads Agent Skills from `.agents/skills/` (OpenCode,
 Freebuff/Codebuff, ...) and/or `AGENTS.md` (OpenCode, Codex, Cursor, ...).
-Gemini CLI uses its own extension mechanism: see the README.
 
     python scripts/install_agent.py                  # install into the current folder
     python scripts/install_agent.py --scope user     # skill for every project (~/.agents/skills)

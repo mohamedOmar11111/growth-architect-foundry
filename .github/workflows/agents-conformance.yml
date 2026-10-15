@@ -1,6 +1,6 @@
 name: Agent-Conformance
 
-# Installs the real OpenCode and Gemini CLIs and proves Foundry is discoverable in each.
+# Installs the real OpenCode and Codex CLIs and proves Foundry is discoverable in each.
 # Nightly + manual, so upstream format changes fail loudly without blocking merges.
 on:
   schedule:
@@ -22,7 +22,7 @@ jobs:
       with:
         node-version: "22"
     - name: Install agent CLIs
-      run: npm install -g opencode-ai @google/gemini-cli
+      run: npm install -g opencode-ai @openai/codex
     - name: Install Foundry deps
       run: python -m pip install -r requirements.txt
     - name: Conformance (L0 discovery)
