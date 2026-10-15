@@ -4,6 +4,8 @@
 [![Kernel-Guard](https://github.com/mohamedOmar11111/growth-architect-foundry/actions/workflows/kernel-guard.yml/badge.svg)](https://github.com/mohamedOmar11111/growth-architect-foundry/actions/workflows/kernel-guard.yml)
 [![Code-Quality-Guard](https://github.com/mohamedOmar11111/growth-architect-foundry/actions/workflows/pylint.yml/badge.svg)](https://github.com/mohamedOmar11111/growth-architect-foundry/actions/workflows/pylint.yml)
 
+[![Architecture diagram of mohamedomar11111/growth-architect-foundry](https://gitdiagram.com/mohamedomar11111/growth-architect-foundry/diagram.png)](https://gitdiagram.com/mohamedomar11111/growth-architect-foundry?utm_source=readme&utm_medium=picture)
+
 Every client you take on means rebuilding the same ops stack. The Foundry is
 that stack, already built — plug in a client, plug in whichever AI tool you
 already pay for, go. **23 deterministic commands**, multi-tenant isolation,
