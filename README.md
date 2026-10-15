@@ -34,6 +34,11 @@ Requirements: Python 3.10+ and `pip install -r requirements.txt` (Google Ads SDK
 is optional). Or just talk to Claude: "audit my account" / "راجع حسابي".
 
 Slash commands: `/foundry:init`, `doctor`, `audit`, `diagnose`, `report`, `live`.
+
+<p align="center">
+  <img src="./assets/readme/foundry-engine-vs-workspace.svg" width="100%"
+       alt="Foundry layout: the read-only engine and tenant template on the left, replaced on plugin update; paths.py sends reports, logs and client folders to your own workspace on the right.">
+</p>
 The full 23+ command surface is available through the skill.
 
 ### Works with any coding agent
@@ -99,6 +104,11 @@ save reports instead of inventing a score.
 Never auto-approve `live pause` or `live budget`.
 
 ### Live ad-account safety
+
+<p align="center">
+  <img src="./assets/readme/foundry-live-write-gate.svg" width="100%"
+       alt="Flowchart: a live write is applied only if --confirm is given, the data is fresh and within the 20 percent cap, and a human types the campaign key at a terminal; an agent shell has no terminal and is refused with exit 3.">
+</p>
 
 - Failed API calls are reported as **FETCH FAILED** and exit non-zero, never as "no campaigns".
 - Writes (`live pause`, `live budget`) need `--confirm` **and a person typing the campaign key at a real terminal**
@@ -185,6 +195,11 @@ Never auto-approve `live pause` or `live budget`.
 ---
 
 ## Architecture
+
+<p align="center">
+  <img src="./assets/readme/foundry-architecture.svg" width="100%"
+       alt="Foundry architecture: coding agents read the skill and AGENTS.md and run foundry.py; the command engine writes reports to your workspace; a live ad-account write must pass a human gate.">
+</p>
 
 Multi-tenant from day one. One kernel, unlimited clients. Each client's
 credentials, strategy, and history live in their own isolated folder — no
