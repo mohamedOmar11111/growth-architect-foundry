@@ -43,29 +43,45 @@ follows those conventions.
 |---|---|
 | Claude Code | the plugin above |
 | OpenCode | from your project folder: `python <foundry>/scripts/install_agent.py` |
+| Codex (CLI, IDE, app) | same installer (Codex reads `.agents/skills/` and `AGENTS.md`); use a workspace-write sandbox, Foundry saves reports in your workspace |
 | Freebuff / Codebuff | same installer (they read `.agents/skills/`) |
-| Gemini CLI | `gemini extensions install https://github.com/mohamedOmar11111/growth-architect-foundry` |
-| Codex, Cursor, others reading `AGENTS.md` | same installer (adds a managed block to your `AGENTS.md`; Cursor also has `.cursor/rules/`) |
+| Cursor, others reading `AGENTS.md` | same installer (adds a managed block to your `AGENTS.md`; Cursor also has `.cursor/rules/`) |
+| ChatGPT (web) | build the Custom GPT pack, see below |
 | Plain terminal / API key only | `python foundry.py account audit --client Aurora_Skincare`, or `python core/engine/agent_shim.py content-engine --task "..."` |
 
 `install_agent.py --scope user` installs the skill for every project. It copies files (no symlinks, works on
 Windows) and writes the Foundry path into the installed skill, so the agent knows where `foundry.py` is.
+
+### ChatGPT (web): Custom GPT pack
+
+ChatGPT cannot reach your files or run Foundry on your machine, so the GPT runs the engine inside Code
+Interpreter, which has **no network**. That means live ad-account reads and writes are impossible there by
+construction; use the Claude Code, OpenCode or Codex install for those. Everything offline works: audit,
+diagnose, client reports (EN/AR), and the economics calculator.
+
+```
+python scripts/build_chatgpt_pack.py     # writes dist/foundry-chatgpt/ and dist/foundry-chatgpt.zip
+```
+
+Follow `dist/foundry-chatgpt/SETUP.md` (paste `GPT_INSTRUCTIONS.md`, enable Code Interpreter, upload the
+engine zip and `knowledge/*`). The engine needs only the Python standard library. The sandbox resets between
+chats, so download the workspace zip at the end and re-upload it next time.
 
 **Support status** (what is actually tested, not just claimed):
 
 | Agent | L0 discovered | L1 runs a command | L2 live writes blocked | Evidence |
 |---|---|---|---|---|
 | Claude Code | yes | yes | yes | `claude plugin validate`, manual runs |
-| OpenCode | yes | not yet | yes (code gate) | nightly `agent-conformance` job |
-| Gemini CLI | yes | not yet | yes (code gate) | nightly `agent-conformance` job |
+| OpenCode | yes | yes (manual run, free `big-pickle` model) | yes (code gate) | nightly `agent-conformance` + manual run 2026-10-14 |
+| Codex | yes | yes (manual `codex exec`, workspace-write sandbox) | yes (code gate) | nightly `agent-conformance` + manual run 2026-10-15 |
 | Freebuff / Codebuff | docs only | not yet | yes (code gate) | not installed in CI |
-| Codex, Cursor, others | via `AGENTS.md` | not yet | yes (code gate) | not tested |
+| Cursor, others | via `AGENTS.md` | not yet | yes (code gate) | not tested |
+| ChatGPT (Custom GPT) | n/a | engine verified offline; GPT itself not testable from here | n/a (no network) | `tests/test_chatgpt_pack.py` |
 
 L2 is enforced by Foundry itself (a typed approval on a real terminal), so it holds in any agent.
-L1 (a model actually running `foundry` end to end) has not been tested in the non-Claude agents.
-
-**Pin Gemini installs** to a release so auto-update does not track `master`:
-`gemini extensions install https://github.com/mohamedOmar11111/growth-architect-foundry --ref v1.3.0`
+L1 means a model actually ran `foundry` end to end. One manual run is evidence, not a guarantee: results vary
+by model, and no CI job exercises L1. With a read-only sandbox, Codex correctly reported that it could not
+save reports instead of inventing a score.
 
 **Keep live writes behind a prompt.** Other agents have no per-command allowlist, so set one yourself. OpenCode
 (`opencode.json`, last matching rule wins):

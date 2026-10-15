@@ -156,9 +156,6 @@ Use this skill when the user mentions:
 # OpenCode, Freebuff/Codebuff, Codex, Cursor (run from YOUR project folder)
 python <path-to-foundry>/scripts/install_agent.py
 
-# Gemini CLI
-gemini extensions install https://github.com/mohamedOmar11111/growth-architect-foundry
-
 # Standalone
 python foundry.py account audit --client Aurora_Skincare
 ```

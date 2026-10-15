@@ -16,7 +16,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from dotenv import dotenv_values
+from envfile import dotenv_values
 
 from paths import CLIENTS_ROOT  # noqa: E402
 

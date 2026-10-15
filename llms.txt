@@ -22,7 +22,6 @@ Tenants: `list`
 ## Installation
 Claude Code: `/plugin install foundry@growth-architect-foundry`
 OpenCode / Freebuff / Codex / Cursor: `python scripts/install_agent.py` (from your project folder)
-Gemini CLI: `gemini extensions install https://github.com/mohamedOmar11111/growth-architect-foundry`
 Standalone: `python foundry.py account audit --client Aurora_Skincare`
 
 ## Safety

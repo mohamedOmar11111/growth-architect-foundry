@@ -14,17 +14,14 @@ from pathlib import Path
 from tenant import CLIENTS_ROOT
 from commands.state import config_status
 
-try:
-    from dotenv import dotenv_values
-except ImportError:
-    dotenv_values = None  # graceful: list still works, just no .env reading
+from envfile import dotenv_values
 
 
 def _scan_tenant(name: str) -> dict:
     root = CLIENTS_ROOT / name
     env_path = root / ".env"
     strategy = root / "STRATEGY.md"
-    env = dotenv_values(env_path) if (dotenv_values and env_path.exists()) else {}
+    env = dotenv_values(env_path) if env_path.exists() else {}
     has_content = (root / "02_Content").exists()
     reports = len(list((root / "04_Reports").glob("*.md"))) if (root / "04_Reports").exists() else 0
     signals = len(list((root / "signals").glob("*.md"))) if (root / "signals").exists() else 0

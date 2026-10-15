@@ -19,8 +19,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-import yaml
-from dotenv import dotenv_values
+from envfile import yaml, dotenv_values
 
 from paths import WORKSPACE as HQ_ROOT, SIGNALS_DIR, TASKS_DIR, LOG_PATH, CLIENTS_ROOT
 

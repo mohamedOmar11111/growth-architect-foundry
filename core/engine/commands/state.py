@@ -18,8 +18,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-import yaml
-
+from envfile import load_frontmatter
 from tenant import TenantContext
 from signals import read_signals
 from utils import LOG_PATH
@@ -51,7 +50,7 @@ def read_tasks(tenant: TenantContext) -> list[dict[str, Any]]:
         parts = text.split("---", 2)
         if len(parts) < 3:
             continue
-        meta = yaml.safe_load(parts[1]) or {}
+        meta = load_frontmatter(parts[1])
         meta["_path"] = path
         meta["_body"] = parts[2].strip()
         results.append(meta)

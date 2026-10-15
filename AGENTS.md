@@ -1,7 +1,6 @@
 # Foundry: instructions for any coding agent
 
-Read by OpenCode, Freebuff/Codebuff, Codex, Cursor and Gemini CLI (as the extension
-context file). Claude Code gets the same content through the plugin skill.
+Read by OpenCode, Freebuff/Codebuff, Codex and Cursor. Claude Code gets the same content through the plugin skill.
 
 <!-- foundry:begin -->
 ## Section 0: Foundry (growth ops kernel), read before acting

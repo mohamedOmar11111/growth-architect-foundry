@@ -1,4 +1,4 @@
-"""Drive the REAL agent CLIs to prove Foundry is discoverable (conformance level L0).
+"""Drive the REAL agent CLIs (OpenCode, Codex) to prove Foundry is discoverable (conformance level L0).
 
     python scripts/agent_conformance.py            # skips agents that are not installed
     python scripts/agent_conformance.py --require  # fail if an agent is missing (CI)
@@ -55,27 +55,20 @@ def check_opencode(workspace: Path, home: Path) -> str:
     return "PASS: skill discovered from .agents/skills"
 
 
-def check_gemini(workspace: Path, home: Path) -> str:
-    exe = shutil.which("gemini")
+def check_codex(workspace: Path, home: Path) -> str:
+    """`codex debug prompt-input` prints the model-visible prompt as JSON without calling a model."""
+    exe = shutil.which("codex")
     if not exe:
-        return "SKIP: gemini not installed"
+        return "SKIP: codex not installed"
     env = _sandbox_env(home)
-    gem_dir = home / ".gemini"
-    gem_dir.mkdir(parents=True, exist_ok=True)
-    trusted = {str(REPO): "TRUST_FOLDER", str(workspace): "TRUST_FOLDER"}
-    (gem_dir / "trustedFolders.json").write_text(json.dumps(trusted), encoding="utf-8")
-
-    done = _run([exe, "extensions", "install", str(REPO), "--consent", "--skip-settings"],
-                workspace, env)
-    # Judge by output, not exit code: Gemini CLI 0.4x asserts in libuv on exit on Windows.
-    if "installed successfully" not in done.stdout + done.stderr:
-        return f"FAIL: extension install: {(done.stdout + done.stderr)[-300:]}"
-    listing = _run([exe, "extensions", "list"], workspace, env)
-    text = listing.stdout + listing.stderr
-    for needle in ("foundry", "AGENTS.md", SKILL):
+    done = _run([exe, "debug", "prompt-input", "hello"], workspace, env)
+    text = done.stdout + done.stderr
+    if done.returncode != 0 and SKILL not in text:
+        return f"FAIL: `codex debug prompt-input` exited {done.returncode}: {text[-200:]}"
+    for needle, what in ((SKILL, "skill"), ("Section 0: Foundry", "AGENTS.md block")):
         if needle not in text:
-            return f"FAIL: `gemini extensions list` is missing '{needle}'"
-    return "PASS: extension installed, AGENTS.md loaded, skill discovered"
+            return f"FAIL: {what} missing from Codex's model-visible prompt"
+    return "PASS: skill listed and AGENTS.md block loaded in Codex's prompt"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -95,7 +88,7 @@ def main(argv: list[str] | None = None) -> int:
             print(f"FAIL: installer: {installed.stderr[-300:]}")
             return 1
         results = {"opencode": check_opencode(workspace, home),
-                   "gemini": check_gemini(workspace, home)}
+                   "codex": check_codex(workspace, home)}
 
     failed = False
     for name, result in results.items():

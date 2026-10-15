@@ -20,7 +20,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-import yaml
+from envfile import yaml
 
 from tenant import TenantContext
 
