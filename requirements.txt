@@ -1,5 +1,5 @@
 python-dotenv>=1.0
-pyyaml>=6.0
+pyyaml>=6.0.3
 requests>=2.31
 # Optional: Google Ads live operations
 google-ads>=24.0
