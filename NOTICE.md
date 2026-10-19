@@ -23,6 +23,13 @@ open-source projects. Each upstream licence text is reproduced verbatim in
 `Methodology/`, `Protocols/` (other than the rows above), `Intelligence/` (other than Prompt Master),
 and all of `core/engine/`.
 
+## Modifications to bundled files
+
+Two example snippets had credential-shaped placeholder passwords (`'secure_password'`, `'password123'`)
+that secret scanners flag. They now read `process.env.TEST_USER_PASSWORD`:
+`Agents/testing/testing-api-tester.md` and `Agents/testing/testing-performance-benchmarker.md`.
+No other upstream text was changed for this.
+
 ## How this was determined
 
 Upstream was identified by matching file names and frontmatter against each
