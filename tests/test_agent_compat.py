@@ -34,7 +34,8 @@ def test_skill_follows_agent_skills_spec(skill):
 def test_versions_agree_across_plugin_formats():
     plugin = json.loads((ROOT / ".claude-plugin/plugin.json").read_text())
     market = json.loads((ROOT / ".claude-plugin/marketplace.json").read_text())
-    assert plugin["version"] == market["plugins"][0]["version"]
+    codex = json.loads((ROOT / ".codex-plugin/plugin.json").read_text())
+    assert plugin["version"] == market["plugins"][0]["version"] == codex["version"]
 
 
 def test_agents_md_has_one_managed_block_and_sentinel():
@@ -86,3 +87,30 @@ def test_installer_refuses_to_run_inside_foundry_repo(capsys):
     inst = _installer()
     assert inst.main(["--workspace", str(inst.REPO)]) == 2
     assert "YOUR project folder" in capsys.readouterr().err
+
+
+def test_codex_plugin_manifest_is_complete_and_assets_exist():
+    manifest = json.loads((ROOT / ".codex-plugin/plugin.json").read_text(encoding="utf-8"))
+    assert NAME_RE.match(manifest["name"]) and manifest["license"] == "MIT"
+    ui = manifest["interface"]
+    assert len(ui["shortDescription"]) <= 120 and ui["defaultPrompt"]
+    paths = [manifest["skills"], ui["composerIcon"], ui["logo"], *ui["screenshots"]]
+    for rel in paths:
+        assert rel.startswith("./") and ".." not in rel
+        assert (ROOT / rel).exists(), rel
+    for url in (ui["websiteURL"], ui["privacyPolicyURL"], ui["termsOfServiceURL"]):
+        assert url.startswith("https://")
+
+
+def test_codex_marketplace_points_at_this_plugin():
+    market = json.loads((ROOT / ".agents/plugins/marketplace.json").read_text(encoding="utf-8"))
+    entry = market["plugins"][0]
+    assert entry["name"] == "foundry" and entry["source"]["path"] == "./"
+    assert entry["policy"]["installation"] and entry["policy"]["authentication"]
+
+
+def test_no_credential_shaped_placeholders_in_bundled_personas():
+    import re
+    pattern = re.compile(r"password\s*[:=]\s*['\"][^'\"]+['\"]", re.IGNORECASE)
+    for path in (ROOT / "01_Context_Vault").rglob("*.md"):
+        assert not pattern.search(path.read_text(encoding="utf-8", errors="ignore")), path

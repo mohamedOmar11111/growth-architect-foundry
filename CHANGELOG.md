@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.4.1
+- **Codex plugin:** `.codex-plugin/plugin.json` and `.agents/plugins/marketplace.json`, with icon, logo and
+  screenshots, so Foundry can be listed in Codex plugin catalogs. The HOL plugin scanner (v3.49.0, the
+  version the Codex plugin catalog pins) scores it 100/100 with no findings.
+- `SECURITY.md` (private vulnerability reporting, supported versions, known limits).
+- `requirements.lock` (pinned dependency snapshot), Dependabot for GitHub Actions and pip, `.codexignore`.
+- Placeholder passwords in two bundled example personas now read an environment variable.
+
 ## 1.4.0
 - **ChatGPT:** Custom GPT pack (`scripts/build_chatgpt_pack.py`): offline engine zip, GPT instructions
   (under the 8,000-character cap) and knowledge files. Runs in Code Interpreter with no network, so live
