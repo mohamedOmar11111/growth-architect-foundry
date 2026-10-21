@@ -11,13 +11,14 @@ numbers — same rule as diagnose and audit.
 
 from __future__ import annotations
 
+import csv
+from pathlib import Path
 import sys
-
 from typing import Any
 
 from tenant import TenantContext
-from utils import append_log
-from commands.state import collect_snapshot
+from utils import append_log, sanitize_text
+from commands.state import collect_snapshot, _to_number
 
 
 def _format_list(rows: list[dict[str, Any]]) -> str:
@@ -81,12 +82,103 @@ def _format_compare(rows: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+def _cmd_import(tenant: TenantContext, opts: dict, now) -> int:
+    file_raw = opts.get("file")
+    if not file_raw:
+        print("ERROR: --file <path.csv> is required for `campaigns import`.", file=sys.stderr)
+        return 2
+    csv_path = Path(file_raw)
+    if not csv_path.exists() or not csv_path.is_file():
+        print(f"ERROR: CSV file not found: {csv_path}", file=sys.stderr)
+        return 2
+
+    rows: list[dict[str, Any]] = []
+    with open(csv_path, "r", encoding="utf-8-sig", newline="") as handle:
+        reader = csv.DictReader(handle)
+        for raw in reader:
+            norm = {str(k).strip().lower(): str(v).strip() for k, v in raw.items() if k}
+            name = sanitize_text(
+                norm.get("campaign") or norm.get("campaign name") or norm.get("name") or ""
+            )
+            if not name or name.lower() in ("total", "account total"):
+                continue
+            status = sanitize_text(
+                norm.get("status") or norm.get("campaign status") or norm.get("delivery") or "ENABLED"
+            ).upper()
+            budget = _to_number(norm.get("budget") or norm.get("daily budget") or "0") or 0.0
+            cost = _to_number(
+                norm.get("spend") or norm.get("cost") or norm.get("amount spent") or "0"
+            ) or 0.0
+            impr = int(_to_number(norm.get("impressions") or norm.get("impr.") or "0") or 0)
+            clicks = int(_to_number(norm.get("clicks") or "0") or 0)
+            conv = _to_number(
+                norm.get("conversions") or norm.get("results") or norm.get("purchases") or "0"
+            ) or 0.0
+            ctr = (clicks / impr * 100.0) if impr > 0 else 0.0
+            cpa = (cost / conv) if conv > 0 else None
+            rows.append({
+                "name": name,
+                "status": status,
+                "budget": budget,
+                "today_cost": 0.0,
+                "impressions": impr,
+                "clicks": clicks,
+                "ctr": ctr,
+                "cost": cost,
+                "conversions": conv,
+                "cpa": cpa,
+            })
+
+    if not rows:
+        print(f"ERROR: no valid campaign rows found in {csv_path}.", file=sys.stderr)
+        return 2
+
+    lines = [
+        f"# {tenant.name} — Imported Ad Report — {now.strftime('%Y-%m-%d %H:%M')}",
+        "",
+        f"Scope: imported from `{csv_path.name}` ({len(rows)} campaign(s)). Read-only.",
+        "",
+        "## Alerts",
+        "None.",
+        "",
+        "## Campaign Summary (last 7 days)",
+        "| Campaign | Status | Daily Budget | Today's Spend | Impr. | Clicks | "
+        "CTR | Cost | Conversions | CPA |",
+        "|---|---|---|---|---|---|---|---|---|---|",
+    ]
+    for r in rows:
+        cpa_str = f"{r['cpa']:.2f}" if r["cpa"] is not None else "—"
+        lines.append(
+            f"| {r['name']} | {r['status']} | {r['budget']:.2f} | "
+            f"{r['today_cost']:.2f} | {r['impressions']:,} | "
+            f"{r['clicks']:,} | {r['ctr']:.2f}% | {r['cost']:.2f} | "
+            f"{r['conversions']:.1f} | {cpa_str} |"
+        )
+    report = "\n".join(lines)
+    report_path = tenant.reports_dir / f"{now.strftime('%Y-%m-%d-%H')}-ad-intel-report.md"
+    report_path.write_text(report, encoding="utf-8")
+    opts.setdefault("_extra", {})["_data"] = {
+        "campaigns_imported": len(rows),
+        "total_spend": sum(r["cost"] for r in rows),
+        "total_conversions": sum(r["conversions"] for r in rows),
+    }
+    print(report)
+    print(f"\n[{tenant.name}] campaigns import: report written -> {report_path}")
+    append_log(tenant.name, "campaigns-import",
+               f"Imported {len(rows)} campaign(s) from CSV into ad-intel report format",
+               report_path)
+    return 0
+
+
 def run(tenant: TenantContext, opts: dict | None = None) -> int:
     opts = opts or {}
     verb = opts.get("verb", "list")
     snap = collect_snapshot(tenant)
     ad = snap["ad_report"]
     now = snap["now"]
+
+    if verb == "import":
+        return _cmd_import(tenant, opts, now)
 
     if ad is None:
         print(f"[{tenant.name}] campaigns {verb}: no ad-intel report captured yet. "

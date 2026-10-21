@@ -160,6 +160,52 @@ def cmd_vat(args: argparse.Namespace) -> dict:
     }
 
 
+def cmd_leadgen(args: argparse.Namespace) -> dict:
+    if not 0 < args.qualify_rate <= 1 or not 0 < args.close_rate <= 1:
+        raise CalcError("qualify-rate and close-rate must be in (0, 1].")
+    if args.deal_value <= 0:
+        raise CalcError("deal-value must be > 0.")
+    contribution = args.deal_value - args.cogs
+    if contribution <= 0:
+        raise CalcError(
+            f"Contribution per closed deal is {contribution:.2f} — the unit "
+            "economics lose money before any ad spend. No break-even exists."
+        )
+    lead_to_close_rate = args.qualify_rate * args.close_rate
+    break_even_cpl = contribution * lead_to_close_rate
+    break_even_cpql = contribution * args.close_rate
+    out: dict = {
+        "command": "leadgen",
+        "inputs": vars(args),
+        "lead_to_close_rate": lead_to_close_rate,
+        "contribution_per_deal": contribution,
+        "break_even_cpl": break_even_cpl,
+        "break_even_cpql": break_even_cpql,
+        "working_target_cpl": break_even_cpl / 1.2,
+    }
+    if args.spend is not None and args.leads is not None:
+        if args.spend < 0 or args.leads <= 0:
+            raise CalcError("spend must be >= 0 and leads must be > 0.")
+        closed_deals = args.leads * lead_to_close_rate
+        revenue = closed_deals * args.deal_value
+        non_ad_cost = closed_deals * args.cogs
+        profit = revenue - args.spend - non_ad_cost
+        real_cpl = args.spend / args.leads
+        out.update({
+            "closed_deals": closed_deals,
+            "revenue": revenue,
+            "real_roas": revenue / args.spend if args.spend else None,
+            "real_cpl": real_cpl,
+            "gross_profit_after_ads": profit,
+            "verdict": (
+                "profitable" if profit > 0 else
+                "break-even" if profit == 0 else
+                "losing money — cut spend or improve lead qualification/closing"
+            ),
+        })
+    return out
+
+
 def _fmt(value: float) -> str:
     return f"{value:,.2f}"
 
@@ -215,6 +261,23 @@ def render_text(payload: dict) -> str:
             "Rates last verified 2026-10 — verify before relying on them. "
             "Not tax advice.",
         ]
+    elif cmd == "leadgen":
+        lines += [
+            f"Lead-to-close rate (qualify x close): {payload['lead_to_close_rate'] * 100:.1f}%",
+            f"Contribution per closed deal:         {_fmt(payload['contribution_per_deal'])}",
+            f"BREAK-EVEN CPL (per raw lead):        {_fmt(payload['break_even_cpl'])}",
+            f"BREAK-EVEN CPQL (per qualified lead): {_fmt(payload['break_even_cpql'])}",
+            f"Working target CPL (break-even/1.2):  {_fmt(payload['working_target_cpl'])}",
+        ]
+        if "real_cpl" in payload:
+            lines += [
+                "",
+                f"Closed deals:           {payload['closed_deals']:,.2f}",
+                f"Revenue:                {_fmt(payload['revenue'])}",
+                f"Real CPL:               {_fmt(payload['real_cpl'])}",
+                f"Gross profit after ads: {_fmt(payload['gross_profit_after_ads'])}",
+                f"VERDICT: {payload['verdict']}",
+            ]
     return "\n".join(lines)
 
 
@@ -269,6 +332,20 @@ def build_parser() -> argparse.ArgumentParser:
     vat.add_argument("--basis", choices=("inclusive", "exclusive"), default="inclusive",
                      help="Whether --budget already includes VAT (default: inclusive).")
     vat.set_defaults(func=cmd_vat)
+
+    lg = sub.add_parser("leadgen", parents=[common],
+                        help="Break-even CPL and funnel profit for lead-gen / WhatsApp funnels.")
+    lg.add_argument("--deal-value", type=float, required=True, dest="deal_value",
+                    help="Average revenue per closed deal.")
+    lg.add_argument("--cogs", type=float, default=0.0,
+                    help="Direct delivery/fulfillment cost per closed deal.")
+    lg.add_argument("--qualify-rate", type=float, default=1.0, dest="qualify_rate",
+                    help="Fraction of raw leads that qualify (0-1].")
+    lg.add_argument("--close-rate", type=float, required=True, dest="close_rate",
+                    help="Fraction of qualified leads that close (0-1].")
+    lg.add_argument("--spend", type=float, default=None, help="Optional ad spend for period.")
+    lg.add_argument("--leads", type=float, default=None, help="Optional raw leads generated.")
+    lg.set_defaults(func=cmd_leadgen)
 
     return parser
 
