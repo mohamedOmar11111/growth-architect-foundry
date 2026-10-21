@@ -140,3 +140,17 @@ def cmd_vat(opts: dict) -> int:
 def cmd_vat_impl(ns):
     import calc
     return calc.cmd_vat(ns)
+
+
+def cmd_leadgen(opts: dict) -> int:
+    return _run_variant(opts, cmd_leadgen_impl, ["deal_value", "close_rate"],
+                        {"cogs": 0.0, "qualify_rate": 1.0, "spend": None, "leads": None})
+
+
+def cmd_leadgen_impl(ns):
+    import calc
+    if ns.spend is not None:
+        ns.spend = float(ns.spend)
+    if ns.leads is not None:
+        ns.leads = float(ns.leads)
+    return calc.cmd_leadgen(ns)

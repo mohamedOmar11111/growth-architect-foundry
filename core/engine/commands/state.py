@@ -85,36 +85,58 @@ def _to_number(cell: str) -> float | None:
 
 
 def read_ad_report(tenant: TenantContext) -> dict[str, Any] | None:
-    """The most recent ad-intel report captured for this tenant, with its
-    campaign table parsed into numbers.
+    """The most recent ad report captured for this tenant (from ad-intel,
+    meta-ads, or live pull), with its campaign table parsed into numbers.
 
     Returns None when no report exists yet — commands must say "no paid data
-    captured" rather than invent figures. The table is the one ad_intel.py's
-    _format_report writes, so the parser matches that contract exactly."""
-    reports = sorted(tenant.reports_dir.glob("*-ad-intel-report.md"))
+    captured" rather than invent figures."""
+    if not tenant.reports_dir.exists():
+        return None
+    reports = sorted(
+        [*tenant.reports_dir.glob("*-ad-intel-report.md"),
+         *tenant.reports_dir.glob("*-meta-ads-report.md"),
+         *tenant.reports_dir.glob("*-live-pull.md")],
+        key=lambda p: p.name,
+    )
     if not reports:
         return None
 
     path = reports[-1]
+    is_live_pull = path.name.endswith("-live-pull.md")
     rows: list[dict[str, Any]] = []
     for line in path.read_text(encoding="utf-8").splitlines():
         if not line.startswith("|"):
             continue
         cells = [c.strip() for c in line.strip("|").split("|")]
-        if len(cells) != 11 or cells[0] == "Campaign" or set(cells[0]) <= {"-", ":"}:
+        if len(cells) != 10 or cells[0] in ("Campaign", "Platform") or set(cells[0]) <= {"-", ":"}:
             continue
-        rows.append({
-            "name": cells[0],
-            "status": cells[1],
-            "daily_budget": _to_number(cells[2]),
-            "today_spend": _to_number(cells[3]),
-            "impressions": _to_number(cells[4]),
-            "clicks": _to_number(cells[5]),
-            "ctr": _to_number(cells[6]),
-            "cost": _to_number(cells[7]),
-            "conversions": _to_number(cells[8]),
-            "cpa": _to_number(cells[9]),
-        })
+        if is_live_pull:
+            rows.append({
+                "platform": cells[0],
+                "name": cells[1],
+                "status": cells[2],
+                "daily_budget": _to_number(cells[3]),
+                "today_spend": None,
+                "cost": _to_number(cells[4]),
+                "impressions": _to_number(cells[5]),
+                "clicks": _to_number(cells[6]),
+                "ctr": _to_number(cells[7]),
+                "conversions": _to_number(cells[8]),
+                "cpa": _to_number(cells[9]),
+            })
+        else:
+            rows.append({
+                "name": cells[0],
+                "status": cells[1],
+                "daily_budget": _to_number(cells[2]),
+                "today_spend": _to_number(cells[3]),
+                "impressions": _to_number(cells[4]),
+                "clicks": _to_number(cells[5]),
+                "ctr": _to_number(cells[6]),
+                "cost": _to_number(cells[7]),
+                "conversions": _to_number(cells[8]),
+                "cpa": _to_number(cells[9]),
+            })
     if not rows:
         return None
 
@@ -166,7 +188,7 @@ def config_status(env: dict[str, str]) -> dict[str, Any]:
     groups = {
         "google-ads": [
             "GOOGLE_ADS_CLIENT_ID", "GOOGLE_ADS_CLIENT_SECRET",
-            "GOOGLE_ADS_REFRESH_TOKEN", "GOOGLE_ADS_DEVELOTER_TOKEN",
+            "GOOGLE_ADS_REFRESH_TOKEN", "GOOGLE_ADS_DEVELOPER_TOKEN",
             "GOOGLE_ADS_CUSTOMER_ID",
         ],
         "meta-ads": ["META_ACCESS_TOKEN", "META_AD_ACCOUNT_ID"],

@@ -16,6 +16,7 @@ from commands.state import collect_snapshot
 
 
 def run(tenant: TenantContext, opts: dict | None = None) -> int:
+    opts = opts or {}
     snap = collect_snapshot(tenant)
     now = snap["now"]
     ad = snap["ad_report"]
@@ -88,6 +89,16 @@ def run(tenant: TenantContext, opts: dict | None = None) -> int:
         "- 7 days is a short window — confidence grows with 30+ days of data.",
         "- Every number here is an estimate. Verify with `calc.py` before committing budget.",
     ]
+
+    opts.setdefault("_extra", {})["_data"] = {
+        "weekly_spend": weekly_spend,
+        "weekly_conversions": weekly_conv,
+        "monthly_spend": monthly_spend,
+        "monthly_conversions": monthly_conv,
+        "observed_cpa": cpa,
+        "target_cpa": float(target_cpa) if target_cpa else None,
+        "campaigns_active": len(rows),
+    }
 
     report_path = tenant.reports_dir / f"{now.strftime('%Y-%m-%d-%H')}-forecast.md"
     full = "\n".join(lines)

@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.4.2
+- **Fix:** `state.config_status` misspelled the Google Ads developer-token env key
+  (`GOOGLE_ADS_DEVELOTER_TOKEN` → `GOOGLE_ADS_DEVELOPER_TOKEN`), so a correctly configured account
+  was reported as missing the key.
+- **Fix:** `read_ad_report` now picks up all three report sources — `*-ad-intel-report.md`,
+  `*-meta-ads-report.md` and `*-live-pull.md` (was: ad-intel only, silently ignoring Meta/live data).
+- **Fix:** `forecast project` was imported and documented but unreachable — registered in the CLI
+  dispatch table and now returns real observed/target spend + conversions in `--json`.
+- **New:** `economics leadgen` — break-even CPL / CPQL and funnel profit for lead-gen and WhatsApp
+  funnels (deal value, qualify/close rates, optional spend+leads for a period verdict).
+- **New:** `campaigns import --file <export.csv>` — converts a platform CSV export into a standard
+  ad-intel report so diagnose/campaigns/forecast work with zero API access.
+- **New:** `account report --format whatsapp` — copy-ready client digest for EN and AR.
+
 ## 1.4.1
 - **Codex plugin:** `.codex-plugin/plugin.json` and `.agents/plugins/marketplace.json`, with icon, logo and
   screenshots, so Foundry can be listed in Codex plugin catalogs. The HOL plugin scanner (v3.49.0, the

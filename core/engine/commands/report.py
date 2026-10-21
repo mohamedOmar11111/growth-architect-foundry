@@ -19,6 +19,7 @@ media buyer actually talks. `--period week` (default) or `month`.
 from __future__ import annotations
 
 import datetime
+import sys
 
 from tenant import TenantContext
 from utils import append_log
@@ -227,6 +228,57 @@ def format_report(tenant: TenantContext, snap: dict, data: dict,
     return "\n".join(lines)
 
 
+def format_whatsapp_report(tenant: TenantContext, snap: dict, data: dict,
+                           lang: str, period: str, days: int) -> str:
+    s = STRINGS[lang]
+    period_label = s["period_label"][period]
+    date_str = snap["now"].strftime("%Y-%m-%d")
+    spend = data["ad_spend"]
+    spend_str = f"{spend:,.2f}" if spend is not None else "—"
+
+    if lang == "ar":
+        lines = [
+            f"*ملخص الأداء — {tenant.name}* ({period_label} · {date_str})",
+            "",
+            f"📌 *الخلاصة:* {len(data['decisions'])} قرارات بانتظار الاعتماد | "
+            f"{len(snap['open_tasks'])} مهام مفتوحة | {len(snap['unprocessed'])} إشارات جديدة",
+            "",
+            f"*الأرقام ({days} يوم):*",
+            f"• الإنفاق الإعلاني: {spend_str}",
+            f"• إشارات تمت معالجتها: {data['signals_processed']}/{data['signals_written']}",
+            f"• مهام أُنجزت: {data['tasks_closed']}/{data['tasks_opened']}",
+            f"• موجزات محتوى: {data['briefs']}",
+            "",
+            "*قرارات تحتاج موافقتك (رد بـ OK للاعتماد):*",
+        ]
+        if data["decisions"]:
+            for i, d in enumerate(data["decisions"][:5], 1):
+                lines.append(f"{i}. {d['what']}")
+        else:
+            lines.append("• لا توجد قرارات معلقة حالياً.")
+    else:
+        lines = [
+            f"*{tenant.name} — {period_label.title()} Executive Digest* ({date_str})",
+            "",
+            f"📌 *VERDICT:* {len(data['decisions'])} decision(s) waiting on you | "
+            f"{len(snap['open_tasks'])} open task(s) | {len(snap['unprocessed'])} unprocessed signal(s)",
+            "",
+            f"*The Numbers ({days}d):*",
+            f"• Ad Spend: {spend_str}",
+            f"• Signals Processed: {data['signals_processed']}/{data['signals_written']}",
+            f"• Tasks Closed: {data['tasks_closed']}/{data['tasks_opened']}",
+            f"• Content Briefs: {data['briefs']}",
+            "",
+            "*Decisions Needed (Reply OK to approve):*",
+        ]
+        if data["decisions"]:
+            for i, d in enumerate(data["decisions"][:5], 1):
+                lines.append(f"{i}. {d['what']}")
+        else:
+            lines.append("• Queue is clean — no pending decisions.")
+    return "\n".join(lines)
+
+
 def run(tenant: TenantContext, opts: dict | None = None) -> int:
     opts = opts or {}
     lang = str(opts.get("lang") or "en").lower()
@@ -238,14 +290,21 @@ def run(tenant: TenantContext, opts: dict | None = None) -> int:
     if days is None:
         print(f"ERROR: unsupported --period '{period}' — use 'week' or 'month'.")
         return 1
+    fmt = str(opts.get("format") or "markdown").lower()
+    if fmt not in ("markdown", "md", "whatsapp"):
+        print(f"ERROR: unsupported --format '{fmt}' — use 'markdown' or 'whatsapp'.", file=sys.stderr)
+        return 2
 
     snap = collect_snapshot(tenant)
     data = build_report_data(snap, days)
-    report = format_report(tenant, snap, data, lang, period, days)
+    if fmt == "whatsapp":
+        report = format_whatsapp_report(tenant, snap, data, lang, period, days)
+        suffix = f"-report-{period}-{lang}-whatsapp.txt"
+    else:
+        report = format_report(tenant, snap, data, lang, period, days)
+        suffix = f"-report-{period}-{lang}.md"
 
-    report_path = tenant.reports_dir / (
-        f"{snap['now'].strftime('%Y-%m-%d-%H')}-report-{period}-{lang}.md"
-    )
+    report_path = tenant.reports_dir / f"{snap['now'].strftime('%Y-%m-%d-%H')}{suffix}"
     report_path.write_text(report, encoding="utf-8")
 
     print(report)

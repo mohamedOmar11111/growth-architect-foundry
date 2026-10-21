@@ -1,6 +1,6 @@
 # Growth Architect Foundry
 
-> Multi-tenant agency growth engine with 23 deterministic commands. Not prompts pretending to be software.
+> Multi-tenant agency growth engine with 31 deterministic commands. Not prompts pretending to be software.
 
 ## What it is
 A Claude Code plugin and standalone CLI for marketing agencies. One kernel, unlimited clients. Every command is deterministic Python — same input, same output, every time. No LLM calls in the command layer; judgment work stays in the AI interface (skills and agents).

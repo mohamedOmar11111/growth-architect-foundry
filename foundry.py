@@ -99,6 +99,7 @@ GROUPS: dict[str, dict[str, dict]] = {
     "economics": {
         "breakeven": {"module": "calc_commands", "tenant": False, "func": "cmd_breakeven"},
         "cod":       {"module": "calc_commands", "tenant": False, "func": "cmd_cod"},
+        "leadgen":   {"module": "calc_commands", "tenant": False, "func": "cmd_leadgen"},
         "learning":  {"module": "calc_commands", "tenant": False, "func": "cmd_learning"},
         "vat":       {"module": "calc_commands", "tenant": False, "func": "cmd_vat"},
     },
@@ -106,6 +107,7 @@ GROUPS: dict[str, dict[str, dict]] = {
         "list":    {"module": "campaigns", "tenant": True},
         "status":  {"module": "campaigns", "tenant": True},
         "compare": {"module": "campaigns", "tenant": True},
+        "import":  {"module": "campaigns", "tenant": True},
     },
     "live": {
         "pull":    {"module": "live", "tenant": True},
@@ -134,6 +136,9 @@ GROUPS: dict[str, dict[str, dict]] = {
     "season": {
         "plan": {"module": "season", "tenant": True},
     },
+    "forecast": {
+        "project": {"module": "forecast", "tenant": True},
+    },
     "ops": {
         "status":  {"module": "ops", "tenant": True},
         "cadence": {"module": "ops", "tenant": True},
@@ -148,7 +153,8 @@ GROUPS: dict[str, dict[str, dict]] = {
 }
 
 ECON_KEYS = ("price", "cogs", "shipping", "fees", "deliver", "return_cost", "spend",
-             "orders", "aov", "ship_out", "cpa", "events", "budget", "country", "basis")
+             "orders", "aov", "ship_out", "cpa", "events", "budget", "country", "basis",
+             "deal_value", "qualify_rate", "close_rate", "leads")
 
 # Flat command count for --version display
 TOTAL_COMMANDS = sum(len(verbs) for verbs in GROUPS.values())
@@ -184,6 +190,10 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Tenant folder name under 02_Active_Clients/.")
     parser.add_argument("--lang", default=None, help="Report language (en|ar).")
     parser.add_argument("--period", default=None, help="Report period (week|month).")
+    parser.add_argument("--format", dest="report_format", default=None,
+                        help="Report format (markdown|whatsapp).")
+    parser.add_argument("--file", dest="file", default=None,
+                        help="CSV file path for `campaigns import`.")
     parser.add_argument("--target-cpa", dest="target_cpa", default=None,
                         help="Target CPA override.")
     parser.add_argument("--json", dest="as_json", action="store_true",
@@ -197,7 +207,8 @@ def build_parser() -> argparse.ArgumentParser:
                              "Economics: confirmation rate, e.g. --confirm 0.85.")
     for flag in ("price", "cogs", "shipping", "fees", "deliver", "return-cost",
                  "spend", "orders", "aov", "ship-out", "cpa", "events",
-                 "budget", "country", "basis"):
+                 "budget", "country", "basis", "deal-value", "qualify-rate",
+                 "close-rate", "leads"):
         parser.add_argument(f"--{flag}", dest=flag.replace("-", "_"), default=None,
                             help=f"Economics input ({flag}).")
     return parser
@@ -279,6 +290,8 @@ def _execute(args: argparse.Namespace, extra: dict) -> int:
     opts = {
         "lang": args.lang,
         "period": args.period,
+        "format": args.report_format,
+        "file": args.file,
         "target_cpa": args.target_cpa,
         "campaign_id": args.campaign_id,
         "new_budget": args.new_budget,
