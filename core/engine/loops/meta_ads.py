@@ -34,7 +34,31 @@ CONTENT_OPPORTUNITY_MIN_CLICKS = 20
 # This is a judgment call on which action_types count as a real conversion
 # for alerting purposes, not a platform-defined constant — revisit per
 # tenant if their actual conversion event differs from these.
-CONVERSION_ACTION_TYPES = {"lead", "purchase", "complete_registration", "offsite_conversion"}
+CONVERSION_EVENTS = {"lead", "purchase", "complete_registration", "messaging_conversation_started_7d"}
+
+
+def _canonical_action(action_type: str) -> str:
+    """Strip Meta's prefixes so 'offsite_conversion.fb_pixel_purchase', 'omni_purchase' and
+    'purchase' all map to 'purchase'; 'lead_grouped' maps to 'lead'."""
+    for prefix in ("offsite_conversion.fb_pixel_", "offsite_conversion.", "onsite_conversion.", "omni_"):
+        if action_type.startswith(prefix):
+            action_type = action_type[len(prefix):]
+            break
+    return "lead" if action_type == "lead_grouped" else action_type
+
+
+def count_conversions(actions: list[dict]) -> float:
+    """Sum real conversions from a Meta `actions` array without double counting.
+
+    Meta reports the same event under several action_types (e.g. 'purchase' AND
+    'offsite_conversion.fb_pixel_purchase'), so take the max per canonical event, then sum events.
+    Messaging campaigns count 'messaging_conversation_started_7d' as their conversion."""
+    best: dict[str, float] = {}
+    for a in actions or []:
+        name = _canonical_action(a.get("action_type", ""))
+        if name in CONVERSION_EVENTS:
+            best[name] = max(best.get(name, 0.0), float(a["value"]))
+    return sum(best.values())
 
 
 def _fetch_campaigns(access_token: str, ad_account_id: str) -> dict[str, dict]:
@@ -81,10 +105,7 @@ def _fetch_insights(access_token: str, ad_account_id: str) -> list[dict]:
     data = response.json()
     rows: list[dict] = []
     for row in data.get("data", []):
-        conversions = sum(
-            float(a["value"]) for a in row.get("actions", [])
-            if a.get("action_type") in CONVERSION_ACTION_TYPES
-        )
+        conversions = count_conversions(row.get("actions", []))
         rows.append({
             "campaign_id": row["campaign_id"],
             "date": row.get("date_start", _today()),

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.3
+- **Fix (found on a real read-only Meta pull):** messaging campaigns always reported 0 conversions,
+  because `messaging_conversation_started_7d` was not counted, and `offsite_conversion` matched only the
+  bare name. New `count_conversions` canonicalises Meta action types and takes the max per event, so
+  `purchase` / `omni_purchase` / `offsite_conversion.fb_pixel_purchase` are not double counted.
+- Includes the 1.4.2 changes below (1.4.2 was never tagged).
+
 ## 1.4.2
 - **Fix:** `state.config_status` misspelled the Google Ads developer-token env key
   (`GOOGLE_ADS_DEVELOTER_TOKEN` → `GOOGLE_ADS_DEVELOPER_TOKEN`), so a correctly configured account
