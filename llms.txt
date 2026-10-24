@@ -5,7 +5,7 @@
 ## What it is
 A Claude Code plugin and standalone CLI for marketing agencies. One kernel, unlimited clients. Every command is deterministic Python — same input, same output, every time. No LLM calls in the command layer; judgment work stays in the AI interface (skills and agents).
 
-## Commands (23)
+## Commands (31)
 Account: `audit`, `diagnose`, `report` (EN/AR)
 Economics: `calc breakeven`, `calc cod`, `calc learning`, `calc vat`
 Campaigns: `list`, `status`, `compare`
@@ -41,7 +41,7 @@ Standalone: `python foundry.py account audit --client Aurora_Skincare`
 
 ## Skills
 - [growth-architect-foundry](skills/growth-architect-foundry/SKILL.md) — the main router and command reference
-- [diagram-design](01_Context_Vault/Skills/diagram-design/SKILL.md) — 38 HTML/SVG diagram primitives
+- [diagram-design](01_Context_Vault/Skills/diagram-design/SKILL.md) — 40 HTML/SVG diagram types
 
 ## Agents (67)
 Full roster in [01_Context_Vault/Agents/](01_Context_Vault/Agents/) — marketing, engineering, design, product, testing, support, and specialized squads including the social media team.

@@ -12,6 +12,7 @@
   funnels (deal value, qualify/close rates, optional spend+leads for a period verdict).
 - **New:** `campaigns import --file <export.csv>` — converts a platform CSV export into a standard
   ad-intel report so diagnose/campaigns/forecast work with zero API access.
+- **Docs:** command count corrected to 31, agent personas to 61, diagram types to 40, smoke-test checks to 12.
 - **New:** `account report --format whatsapp` — copy-ready client digest for EN and AR.
 
 ## 1.4.1
