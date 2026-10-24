@@ -1,6 +1,6 @@
 {
   "name": "foundry",
-  "version": "1.4.1",
+  "version": "1.4.3",
   "description": "Multi-agent growth kernel for agencies: 30+ deterministic commands (audit, diagnose, client reports EN/AR, media math, live Google/Meta ops with maker/checker safety), multi-tenant, runs from your own workspace.",
   "author": { "name": "Mohamed Omar", "url": "https://github.com/mohamedOmar11111" },
   "homepage": "https://github.com/mohamedOmar11111/growth-architect-foundry",

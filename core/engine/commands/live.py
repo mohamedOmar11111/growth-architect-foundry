@@ -265,7 +265,7 @@ def _meta_fetch_campaigns(tenant: TenantContext) -> dict[str, dict]:
                                   "until": today.isoformat()}),
         "time_increment": 1, "access_token": access_token, "limit": 500})
 
-    from loops.meta_ads import CONVERSION_ACTION_TYPES
+    from loops.meta_ads import count_conversions
     for row in insights.get("data", []):
         c = campaigns.get(row["campaign_id"])
         if c is None:
@@ -273,9 +273,7 @@ def _meta_fetch_campaigns(tenant: TenantContext) -> dict[str, dict]:
         c["impressions"] += int(row.get("impressions", 0))
         c["clicks"] += int(row.get("clicks", 0))
         c["cost"] += float(row.get("spend", 0))
-        c["conversions"] += sum(
-            float(a["value"]) for a in row.get("actions", [])
-            if a.get("action_type") in CONVERSION_ACTION_TYPES)
+        c["conversions"] += count_conversions(row.get("actions", []))
     return _finish_rates(campaigns)
 
 

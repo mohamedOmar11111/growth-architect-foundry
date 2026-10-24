@@ -257,3 +257,17 @@ def test_confirm_with_a_value_does_not_authorise_writes(tmp_path):
     with patch.object(live, "_meta_pause_campaign") as pause:
         live._cmd_pause(tenant, campaigns, {"campaign_id": "meta:1", "confirm": "0.85"})
         pause.assert_not_called()
+
+
+def test_count_conversions_messaging_and_no_double_count():
+    from loops.meta_ads import count_conversions
+    actions = [
+        {"action_type": "link_click", "value": "900"},
+        {"action_type": "onsite_conversion.messaging_conversation_started_7d", "value": "92"},
+        {"action_type": "purchase", "value": "3"},
+        {"action_type": "offsite_conversion.fb_pixel_purchase", "value": "3"},
+        {"action_type": "omni_purchase", "value": "3"},
+    ]
+    assert count_conversions(actions) == 95.0
+    assert count_conversions([]) == 0.0
+    assert count_conversions([{"action_type": "post_engagement", "value": "50"}]) == 0.0
