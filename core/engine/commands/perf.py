@@ -153,16 +153,27 @@ def rows_from_report(ad_report: dict[str, Any]) -> list[dict[str, Any]]:
              "conversions": r.get("conversions") or 0.0} for r in ad_report["rows"]]
 
 
-def analyse(rows: list[dict[str, Any]], target_cpa: float | None = None) -> dict[str, Any]:
-    """rows: campaign dicts with name, cost, impressions, clicks, conversions. Only rows with spend are judged."""
+def analyse(rows: list[dict[str, Any]], target_cpa: float | None = None,
+            results_based: bool = False) -> dict[str, Any]:
+    """rows: campaign dicts with name, cost, impressions, clicks, conversions. Only rows with spend are judged.
+
+    results_based: conversions came from Meta's "Results" column, which mixes objectives (reach, clicks, messages,
+    purchases), so no campaign is called a winner on it."""
     live = [dict(r) for r in rows if r["cost"] > 0]
     totals = _totals(live)
     ref = target_cpa or totals["cpa"]
     for r in live:
         r["role"] = _role(r, ref, target_cpa is not None)
+        if results_based and r["role"] == "winner":
+            r["role"] = "ok"
         r["share"] = r["cost"] / totals["cost"] if totals["cost"] else 0.0
     by_role = {k: [r for r in live if r["role"] == k] for k in ("waste", "loser", "winner", "thin", "ok", "unjudged")}
     findings = _findings(totals, by_role, live, target_cpa) if live else []
+    if results_based and live:
+        findings.append(_finding(
+            "Evidence", "Conversions come from Meta's Results column, which counts a different thing per campaign objective.",
+            "Results can be reach, clicks, messages or purchases", "confirmed by data", "medium",
+            "Export with a purchase or lead column (or check Result indicator) before scaling any campaign"))
     return {"totals": totals, "campaigns": sorted(live, key=lambda r: r["cost"], reverse=True), "by_role": by_role,
             "findings": findings, "score": _score(live, totals, target_cpa) if live else None,
             "target_cpa": target_cpa, "skipped_no_spend": len(rows) - len(live)}

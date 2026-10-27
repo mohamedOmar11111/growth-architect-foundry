@@ -218,7 +218,7 @@ def build_diagnosis(snap: dict, target_cpa: float | None) -> dict:
             })
 
     if csv_mode and ad is not None:
-        analysis = perf.analyse(perf.rows_from_report(ad), target_cpa)
+        analysis = perf.analyse(perf.rows_from_report(ad), target_cpa, ad["conversions_from_results"])
         covered = {"Traffic quality", "Conversion"}   # the ladder above already reports these
         findings += [f for f in analysis["findings"] if f["layer"] not in covered]
 

@@ -16,7 +16,7 @@ T = {
         "comp": {"efficiency": "Efficiency", "conversion": "Conversion", "traffic": "Traffic quality", "concentration": "Spend spread"},
         "no_conv": "no conversions", "cpa": "CPA {v}",
         "today_track": "Check the conversion event fires and the export has the results column before touching any bid.",
-        "today_waste": "Confirm tracking is live on {names}, then pause it or cut its budget.",
+        "today_waste": "Confirm tracking is live on {names}, then pause or cut the budget.",
         "today_loser": "Cut the budget of {names} by 20%.",
         "today_none": "Nothing urgent. Keep the setup and re-import next week.",
         "test_winner": "Raise {name} by up to 20% and read CPA after 7 days (now {cpa}).",
@@ -40,8 +40,8 @@ T = {
         "today_loser": "خفّض ميزانية {names} بنسبة 20%.",
         "today_none": "لا شيء عاجل. أبقِ الإعداد كما هو وأعد الاستيراد الأسبوع القادم.",
         "test_winner": "ارفع ميزانية {name} حتى 20% وراجع CPA بعد 7 أيام (الآن {cpa}).",
-        "test_ctr": "أعد كتابة الهوك في {name} (وليس الخطوط) وراجع CTR بعد 7 أيام.",
-        "test_conc": "أطلق حملة ثانية بزاوية مختلفة حتى لا يعتمد الحساب كله على حملة واحدة.",
+        "test_ctr": "أعد كتابة الجملة الافتتاحية في {name} (وليس الخطوط) وراجع CTR بعد 7 أيام.",
+        "test_conc": "أطلق حملة ثانية برسالة مختلفة حتى لا يعتمد الحساب كله على حملة واحدة.",
         "test_target": "احسب نقطة التعادل (`economics breakeven`) ثم أعد التشغيل مع --target-cpa.",
         "test_thin": "ادمج الميزانية في حملات أقل حتى تجمع كل حملة تحويلات كافية.",
         "test_none": "لا يوجد اختبار مقترح بعد. أعد الاستيراد بعد أسبوع من البيانات.",
@@ -49,7 +49,7 @@ T = {
         "stop_none": "لا شيء للإيقاف في هذه البيانات.",
         "limits": ["الفترة هي ما غطّاه الملف المصدَّر، ولا يذكرها الملف.",
                    "التحويلات كما تُبلّغ عنها المنصة. في الدفع عند الاستلام احكم على الإيراد المُسلَّم.",
-                   "الأدوار والدرجة تعتمد على قواعد ثابتة في المحرك، وليست معايير السوق."],
+                   "الأدوار والدرجة تعتمد على قواعد ثابتة في أداة التحليل، وليست معايير السوق."],
     },
 }
 
@@ -134,7 +134,7 @@ def format_report(tenant: str, date: str, perf: dict[str, Any], currency: str | 
     if lang == "ar":
         lines = [f"# {tenant} - تقرير الأداء - {date}", "",
                  f"**الخلاصة:** الدرجة {_score_line(perf, 'ar')}. أُنفق {_money(totals['cost'], currency)} "
-                 f"وحققنا {totals['conversions']:,.0f} تحويل (CPA {cpa}).", "",
+                 f"وحققنا {totals['conversions']:,.0f} تحويلات (CPA {cpa}).", "",
                  "## الأرقام", "| المؤشر | القيمة |", "|---|---|",
                  f"| الإنفاق | {_money(totals['cost'], currency)} |", f"| التحويلات | {totals['conversions']:,.0f} |",
                  f"| CPA | {cpa} |", f"| CTR | {totals['ctr']:.2f}% |", f"| مرات الظهور | {totals['impressions']:,.0f} |", "",

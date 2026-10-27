@@ -86,3 +86,36 @@ def test_report_arabic_and_whatsapp_have_the_campaign_table_and_actions(csv_work
     assert "KSA_Prospecting" in arabic and "افعل اليوم" in arabic and "أوقف" in arabic
     digest = csv_workspace("account", "report", "--lang", "en", "--format", "whatsapp").stdout
     assert "Do today" in digest and "EGY_Broad" in digest
+
+
+def test_results_based_conversions_are_never_called_scale():
+    rows = [row("Reach", 100, 400), row("Sales", 400, 40)]
+    assert {c["role"] for c in analyse(rows)["campaigns"]} >= {"winner"}
+    capped = analyse(rows, results_based=True)
+    assert "winner" not in {c["role"] for c in capped["campaigns"]}
+    assert any("Results column" in f["finding"] for f in capped["findings"])
+
+
+def test_target_cpa_must_be_a_positive_finite_number():
+    from types import SimpleNamespace
+    from commands.state import resolve_target_cpa
+    tenant = SimpleNamespace(env={})
+    for bad in ("0", "-5", "nan", "inf", "abc"):
+        assert resolve_target_cpa(tenant, {"target_cpa": bad}) is None
+    assert resolve_target_cpa(tenant, {"target_cpa": "12.5"}) == 12.5
+
+
+def test_tenant_with_connected_accounts_keeps_the_setup_audit(tmp_path):
+    env = {**os.environ, "FOUNDRY_WORKSPACE": str(tmp_path), "PYTHONIOENCODING": "utf-8"}
+
+    def run(*args):
+        return subprocess.run([sys.executable, str(ROOT / "foundry.py"), *args, "--client", "Acme"],
+                              cwd=tmp_path, env=env, capture_output=True, text=True, timeout=60, check=False)
+
+    run("setup", "init")
+    with open(tmp_path / "02_Active_Clients" / "Acme" / ".env", "a", encoding="utf-8") as handle:
+        handle.write("\nMETA_ACCESS_TOKEN=real_token_value_123\nMETA_AD_ACCOUNT_ID=111222333\n")
+    (tmp_path / "e.csv").write_text("Campaign,Cost,Impressions,Clicks,Conversions\nA,10,1000,50,2\n", encoding="utf-8")
+    run("campaigns", "import", "--file", str(tmp_path / "e.csv"))
+    out = json.loads(run("account", "audit", "--json").stdout)
+    assert out["data"].get("mode") != "csv"

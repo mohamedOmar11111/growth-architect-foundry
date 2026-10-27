@@ -31,9 +31,11 @@ ALIASES: dict[str, tuple[str, ...]] = {
 }
 PAUSED_WORDS = {"paused", "inactive", "off", "removed", "ended", "completed", "archived", "deleted",
                 "مؤقت", "متوقف", "غير نشط", "مكتمل"}
-SKIP_NAME = re.compile(r"^(total|totals|grand total|account total|إجمالي|المجموع)\b", re.I)
+SKIP_NAME = re.compile(r"^(total|totals|grand total|account total|إجمالي|المجموع)\s*(:.*)?$", re.I)
 CURRENCY_IN_HEADER = re.compile(r"\(([A-Za-z]{3})\)")
 NON_NUMERIC = re.compile(r"[^0-9.\-]")
+NON_NUMERIC_KEEP_SEP = re.compile(r"[^0-9.,\-]")
+THOUSANDS_ONLY = re.compile(r"^-?\d{1,3}(,\d{3})+$")
 
 
 def _decode(raw: bytes) -> str:
@@ -46,9 +48,16 @@ def _decode(raw: bytes) -> str:
 
 
 def _split_rows(text: str) -> list[list[str]]:
-    sample = "\n".join(text.splitlines()[:HEADER_SCAN_ROWS + 5])
-    delimiter = max(",;\t", key=sample.count)
-    return [[c.strip() for c in row] for row in csv.reader(io.StringIO(text), delimiter=delimiter)]
+    """Try each delimiter and keep the one that exposes the widest campaign header row."""
+    best: list[list[str]] = []
+    best_width = -1
+    for delimiter in ",;\t":
+        rows = [[c.strip() for c in row] for row in csv.reader(io.StringIO(text), delimiter=delimiter)]
+        start = _find_header(rows)
+        width = len(rows[start]) if start is not None else 0
+        if width > best_width:
+            best, best_width = rows, width
+    return best
 
 
 def _norm(header: str) -> str:
@@ -65,7 +74,13 @@ def _find_header(rows: list[list[str]]) -> int | None:
 
 def to_number(cell: str) -> float | None:
     """'1,234.5', '12%', 'EGP 1,200', '--' -> number or None (never raises)."""
-    cleaned = NON_NUMERIC.sub("", cell.translate(ARABIC_DIGITS).replace(",", ""))
+    text = NON_NUMERIC_KEEP_SEP.sub("", cell.translate(ARABIC_DIGITS))
+    if "," in text and "." in text:      # the last separator is the decimal mark: 1.234,50 or 1,234.50
+        decimal = "," if text.rfind(",") > text.rfind(".") else "."
+        text = text.replace("," if decimal == "." else ".", "").replace(decimal, ".")
+    elif "," in text:                    # 1,234 / 1,234,567 are thousands; 12,5 / 1234,50 are decimals
+        text = text.replace(",", "") if THOUSANDS_ONLY.match(text) else text.replace(",", ".")
+    cleaned = NON_NUMERIC.sub("", text)
     if cleaned in ("", "-", "."):
         return None
     try:
@@ -93,15 +108,15 @@ def _status(raw: str) -> str:
     return "PAUSED" if text in PAUSED_WORDS else text.upper()
 
 
-def _currency(headers: list[str], body: list[list[str]], mapping: dict[str, int]) -> str | None:
+def _currencies(headers: list[str], body: list[list[str]], mapping: dict[str, int]) -> set[str]:
     if "spend" in mapping:
         found = CURRENCY_IN_HEADER.search(headers[mapping["spend"]])
         if found:
-            return found.group(1).upper()
+            return {found.group(1).upper()}
     for i, h in enumerate(headers):
-        if _norm(h) in ("currency code", "currency", "العملة") and body and i < len(body[0]):
-            return body[0][i].upper() or None
-    return None
+        if _norm(h) in ("currency code", "currency", "العملة"):
+            return {r[i].upper() for r in body if i < len(r) and r[i] and not SKIP_NAME.match(r[i])}
+    return set()
 
 
 def _aggregate(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], bool]:
@@ -112,8 +127,9 @@ def _aggregate(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], bool]:
         if into is None:
             merged[row["name"]] = dict(row)
             continue
-        for key in ("budget", "cost", "impressions", "clicks", "conversions"):
+        for key in ("cost", "impressions", "clicks", "conversions"):
             into[key] += row[key]
+        into["budget"] = max(into["budget"], row["budget"])   # CBO repeats the campaign budget per ad set
         if into["status"] == "PAUSED":
             into["status"] = row["status"]
     return list(merged.values()), len(merged) != len(rows)
@@ -126,7 +142,8 @@ def _finish(row: dict[str, Any]) -> dict[str, Any]:
     return row
 
 
-def _warnings(headers: list[str], mapping: dict[str, int], rows: list[dict[str, Any]], aggregated: bool) -> list[str]:
+def _warnings(headers: list[str], mapping: dict[str, int], rows: list[dict[str, Any]], aggregated: bool,
+              currencies: set[str]) -> list[str]:
     out: list[str] = []
     labels = {"spend": "spend", "impressions": "impressions", "clicks": "clicks", "conversions": "conversions"}
     for field, label in labels.items():
@@ -138,6 +155,9 @@ def _warnings(headers: list[str], mapping: dict[str, int], rows: list[dict[str, 
     if "conversions" in mapping and _norm(headers[mapping["conversions"]]) in ("results", "النتائج"):
         out.append("'Results' depends on each campaign's objective (messages, leads, clicks, purchases). "
                    "Check 'Result indicator' before comparing CPA across campaigns.")
+    if len(currencies) > 1:
+        out.append(f"The file mixes currencies ({', '.join(sorted(currencies))}); totals add them together as if "
+                   "they were one currency. Export one currency at a time.")
     if aggregated:
         out.append("The file has several rows per campaign (ad set or ad level); they were summed per campaign.")
     used = set(mapping.values())
@@ -176,9 +196,10 @@ def parse_export(path: Path) -> dict[str, Any]:
     if not rows:
         raise ValueError("The file has a header but no campaign rows (only totals or blank lines).")
     rows, aggregated = _aggregate(rows)
+    currencies = _currencies(headers, body, mapping)
     return {
         "rows": [_finish(r) for r in rows],
-        "warnings": _warnings(headers, mapping, rows, aggregated),
+        "warnings": _warnings(headers, mapping, rows, aggregated, currencies),
         "columns": {f: headers[i] for f, i in mapping.items()},
-        "currency": _currency(headers, body, mapping),
+        "currency": next(iter(currencies)) if len(currencies) == 1 else None,
     }

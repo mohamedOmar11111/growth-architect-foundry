@@ -124,7 +124,7 @@ def _cmd_import(tenant: TenantContext, opts: dict, now) -> int:
             f"| {r['name']} | {r['status']} | {r['budget']:.2f} | "
             f"{r['today_cost']:.2f} | {r['impressions']:,} | "
             f"{r['clicks']:,} | {r['ctr']:.2f}% | {r['cost']:.2f} | "
-            f"{r['conversions']:.1f} | {cpa_str} |"
+            f"{r['conversions']:.2f} | {cpa_str} |"
         )
     report = "\n".join(lines)
     report_path = tenant.reports_dir / f"{now.strftime('%Y-%m-%d-%H')}-ad-intel-report.md"

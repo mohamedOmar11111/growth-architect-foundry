@@ -100,3 +100,27 @@ def test_only_totals_is_an_error(tmp_path):
                                            ("--", None), (" --", None), ("", None), ("abc", None)])
 def test_to_number(cell, expected):
     assert to_number(cell) == expected
+
+
+@pytest.mark.parametrize("cell,expected", [("1.234,50", 1234.5), ("1,234.50", 1234.5), ("1234,50", 1234.5),
+                                           ("12,5", 12.5), ("1,234", 1234.0), ("1,234,567", 1234567.0)])
+def test_to_number_handles_european_and_us_separators(cell, expected):
+    assert to_number(cell) == expected
+
+
+def test_semicolon_file_with_decimal_commas(tmp_path):
+    got = parse_export(write(tmp_path, "Campaign;Spend;Impressions;Clicks;Conversions\nA;1234,50;1000;50;2\n"))
+    assert got["rows"][0]["cost"] == 1234.5
+
+
+def test_campaign_named_total_something_is_kept_but_total_rows_are_dropped(tmp_path):
+    text = "Campaign,Cost,Clicks,Conversions\nTotal Care - Leads,10,5,1\nTotal: Account,10,5,1\nTotals,10,5,1\n"
+    assert [r["name"] for r in parse_export(write(tmp_path, text))["rows"]] == ["Total Care - Leads"]
+
+
+def test_mixed_currencies_warn_and_budget_is_not_summed_across_ad_sets(tmp_path):
+    text = ("Campaign,Ad set,Budget,Cost,Impr.,Clicks,Conversions,Currency code\n"
+            "C1,S1,100,10,100,5,1,USD\nC1,S2,100,20,200,10,2,SAR\n")
+    got = parse_export(write(tmp_path, text))
+    assert got["rows"][0]["budget"] == 100 and got["currency"] is None
+    assert any("mixes currencies" in w for w in got["warnings"])

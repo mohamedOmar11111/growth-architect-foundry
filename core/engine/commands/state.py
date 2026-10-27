@@ -14,6 +14,7 @@ from re-parsing frontmatter its own way.
 from __future__ import annotations
 
 import datetime
+import math
 import re
 from pathlib import Path
 from typing import Any
@@ -107,6 +108,7 @@ def read_ad_report(tenant: TenantContext) -> dict[str, Any] | None:
     text = path.read_text(encoding="utf-8")
     scope = next((ln for ln in text.splitlines() if ln.startswith("Scope: imported from")), "")
     currency = re.search(r"currency ([A-Z]{3})\b", scope)
+    from_results = "conversions <- `Results`" in text or "conversions <- `النتائج`" in text
     for line in text.splitlines():
         if not line.startswith("|"):
             continue
@@ -149,6 +151,8 @@ def read_ad_report(tenant: TenantContext) -> dict[str, Any] | None:
         "path": path,
         "source": "csv" if scope else "live",
         "currency": currency.group(1) if currency else None,
+        "conversions_from_results": from_results,
+        "age_days": _report_age_days(path),
         "rows": rows,
         "totals": {
             "cost": total_cost,
@@ -213,13 +217,25 @@ def config_status(env: dict[str, str]) -> dict[str, Any]:
     return status
 
 
+CSV_MODE_MAX_AGE_DAYS = 30
+
+
+def _report_age_days(path: Path) -> int:
+    """Days since the report's YYYY-MM-DD filename prefix (0 when the name carries no date)."""
+    try:
+        return (datetime.date.today() - datetime.date.fromisoformat(path.name[:10])).days
+    except ValueError:
+        return 0
+
+
 def resolve_target_cpa(tenant: TenantContext, opts: dict | None) -> float | None:
     """--target-cpa wins over TARGET_CPA in the tenant .env; anything unparsable counts as unset."""
     raw = (opts or {}).get("target_cpa") or tenant.env.get(TARGET_CPA_KEY)
     try:
-        return float(raw) if raw is not None else None
+        value = float(raw) if raw is not None else None
     except (TypeError, ValueError):
         return None
+    return value if value is not None and math.isfinite(value) and value > 0 else None
 
 
 def collect_snapshot(tenant: TenantContext) -> dict[str, Any]:
@@ -258,6 +274,7 @@ def collect_snapshot(tenant: TenantContext) -> dict[str, Any]:
         "config": config_status(tenant.env),
     }
     ad = snapshot["ad_report"]
-    snapshot["csv_mode"] = bool(ad and ad["source"] == "csv"
-                                and not all(g["ready"] for g in snapshot["config"]["groups"].values()))
+    # CSV mode only when the user has NOT connected any ad account and the import is recent.
+    snapshot["csv_mode"] = bool(ad and ad["source"] == "csv" and ad["age_days"] <= CSV_MODE_MAX_AGE_DAYS
+                                and not any(g["ready"] for g in snapshot["config"]["groups"].values()))
     return snapshot

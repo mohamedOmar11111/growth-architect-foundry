@@ -283,7 +283,8 @@ def format_whatsapp_report(tenant: TenantContext, snap: dict, data: dict,
 def _run_csv(tenant: TenantContext, opts: dict, snap: dict, lang: str, fmt: str) -> int:
     """CSV mode: a client-facing performance readout from the imported export, not the operator queue."""
     ad = snap["ad_report"]
-    analysis = perf.analyse(perf.rows_from_report(ad), resolve_target_cpa(tenant, opts))
+    analysis = perf.analyse(perf.rows_from_report(ad), resolve_target_cpa(tenant, opts),
+                            ad["conversions_from_results"])
     date = snap["now"].strftime("%Y-%m-%d")
     if fmt == "whatsapp":
         report, suffix = perf_text.format_whatsapp(tenant.name, date, analysis, ad["currency"], lang), f"-report-{lang}-whatsapp.txt"
