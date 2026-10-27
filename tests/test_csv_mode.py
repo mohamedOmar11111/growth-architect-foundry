@@ -56,7 +56,7 @@ def csv_workspace(tmp_path_factory):
 
     def run(*args):
         return subprocess.run([sys.executable, str(ROOT / "foundry.py"), *args, "--client", "Acme"],
-                              cwd=ws, env=env, capture_output=True, text=True, timeout=60, check=False)
+                              cwd=ws, env=env, capture_output=True, text=True, encoding="utf-8", timeout=60, check=False)
 
     run("setup", "init")
     (ws / "export.csv").write_text(
@@ -110,7 +110,7 @@ def test_tenant_with_connected_accounts_keeps_the_setup_audit(tmp_path):
 
     def run(*args):
         return subprocess.run([sys.executable, str(ROOT / "foundry.py"), *args, "--client", "Acme"],
-                              cwd=tmp_path, env=env, capture_output=True, text=True, timeout=60, check=False)
+                              cwd=tmp_path, env=env, capture_output=True, text=True, encoding="utf-8", timeout=60, check=False)
 
     run("setup", "init")
     with open(tmp_path / "02_Active_Clients" / "Acme" / ".env", "a", encoding="utf-8") as handle:
