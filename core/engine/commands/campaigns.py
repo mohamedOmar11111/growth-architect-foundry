@@ -105,13 +105,14 @@ def _cmd_import(tenant: TenantContext, opts: dict, now) -> int:
         f"# {tenant.name} — Imported Ad Report — {now.strftime('%Y-%m-%d %H:%M')}",
         "",
         f"Scope: imported from `{csv_path.name}` ({len(rows)} campaign(s)), "
-        f"currency {currency or 'not stated in the file'}, period as exported. Read-only.",
+        f"currency {currency or 'not stated in the file'}, period {parsed['period'] or 'as exported'}. Read-only.",
         "",
         "## Import warnings",
         *([f"- {w}" for w in warnings] or ["None."]),
         "",
         "## Columns used",
         ", ".join(f"{field} <- `{header}`" for field, header in parsed["columns"].items()),
+        f"Row level: {parsed['level']}. Conversions basis: {parsed['conversions_basis'] or 'a conversions column'}.",
         "",
         "## Campaign Summary (period as exported)",
         "| Campaign | Status | Daily Budget | Today's Spend | Impr. | Clicks | "

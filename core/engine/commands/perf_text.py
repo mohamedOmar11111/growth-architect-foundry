@@ -12,7 +12,8 @@ from commands.perf import MIN_CONV_TO_JUDGE, WEAK_CTR
 
 T = {
     "en": {
-        "roles": {"winner": "Scale", "ok": "Keep", "thin": "Too early", "loser": "Cut", "waste": "Stop", "unjudged": "-"},
+        "roles": {"winner": "Scale", "ok": "Keep", "thin": "Too early", "loser": "Cut", "waste": "Stop", "unjudged": "-",
+                  "paused": "Paused"},
         "comp": {"efficiency": "Efficiency", "conversion": "Conversion", "traffic": "Traffic quality", "concentration": "Spend spread"},
         "no_conv": "no conversions", "cpa": "CPA {v}",
         "today_track": "Check the conversion event fires and the export has the results column before touching any bid.",
@@ -32,7 +33,8 @@ T = {
                    "Roles and the score use fixed heuristics from this engine, not industry benchmarks."],
     },
     "ar": {
-        "roles": {"winner": "وسّع", "ok": "استمر", "thin": "بيانات قليلة", "loser": "قلّل", "waste": "أوقف", "unjudged": "-"},
+        "roles": {"winner": "وسّع", "ok": "استمر", "thin": "بيانات قليلة", "loser": "قلّل", "waste": "أوقف", "unjudged": "-",
+                  "paused": "متوقفة"},
         "comp": {"efficiency": "الكفاءة", "conversion": "التحويل", "traffic": "جودة الزيارات", "concentration": "توزيع الإنفاق"},
         "no_conv": "بدون تحويلات", "cpa": "CPA {v}",
         "today_track": "تأكد أن حدث التحويل يعمل وأن الملف المصدَّر يحتوي عمود النتائج قبل أي تعديل على المزايدة.",
@@ -54,6 +56,19 @@ T = {
 }
 
 
+NOUN_HEAD = {"campaign": ("Campaign", "الحملة"), "ad set": ("Ad set", "المجموعة الإعلانية"), "ad": ("Ad", "الإعلان")}
+
+
+def _ctr(perf: dict[str, Any]) -> str:
+    return f"{perf['totals']['ctr']:.2f}%" if perf["has_clicks"] else "n/a"
+
+
+def _period_line(perf: dict[str, Any], lang: str) -> list[str]:
+    if not perf["period"]:
+        return []
+    return [f"الفترة: {perf['period']}" if lang == "ar" else f"Period: {perf['period']}", ""]
+
+
 def _money(value: float, currency: str | None) -> str:
     return f"{value:,.2f}" + (f" {currency}" if currency else "")
 
@@ -71,7 +86,7 @@ def build_actions(perf: dict[str, Any], lang: str = "en") -> dict[str, list[str]
              [t["today_loser"].format(names=names(roles["loser"]))] if roles["loser"] else [t["today_none"]])
     test = [t["test_winner"].format(name=r["name"], cpa=_cpa(r, lang)) for r in roles["winner"]]
     live = perf["campaigns"]
-    if live and totals["conversions"] and totals["ctr"] < WEAK_CTR:
+    if live and perf["has_clicks"] and totals["conversions"] and totals["ctr"] < WEAK_CTR:
         test.append(t["test_ctr"].format(name=live[0]["name"]))
     if len(live) > 1 and live[0]["share"] > 0.70:
         test.append(t["test_conc"])
@@ -96,65 +111,73 @@ def _score_line(perf: dict[str, Any], lang: str) -> str:
 
 def _campaign_table(perf: dict[str, Any], lang: str, currency: str | None) -> list[str]:
     t = T[lang]
-    head = ("| Campaign | Spend | Share | Conversions | CPA | Call |" if lang == "en"
-            else "| الحملة | الإنفاق | النسبة | التحويلات | CPA | القرار |")
+    noun = NOUN_HEAD[perf["noun"]][0 if lang == "en" else 1]
+    head = (f"| {noun} | Spend | Share | Conversions | CPA | Call |" if lang == "en"
+            else f"| {noun} | الإنفاق | النسبة | التحويلات | CPA | القرار |")
     lines = [head, "|---|---|---|---|---|---|"]
     for r in perf["campaigns"]:
         cpa = f"{r['cost'] / r['conversions']:,.2f}" if r["conversions"] else "-"
         lines.append(f"| {r['name']} | {_money(r['cost'], currency)} | {r['share']:.0%} | {r['conversions']:,.0f} | "
-                     f"{cpa} | {t['roles'][r['role']]} |")
+                     f"{cpa} | {t['roles']['paused' if r['paused'] else r['role']]} |")
     return lines
 
 
-def format_audit(tenant: str, date: str, perf: dict[str, Any], currency: str | None) -> str:
+def _basis_note(basis: str | None, lang: str) -> list[str]:
+    if not basis or basis in ("mixed", "unknown", "non_conversion", "a conversions column"):
+        return []
+    return [f"المحتسب كنتيجة: {basis}" if lang == "ar" else f"Results counted as: {basis}"]
+
+
+def format_audit(tenant: str, date: str, perf: dict[str, Any], currency: str | None, basis: str | None = None) -> str:
     totals, score, t = perf["totals"], perf["score"], T["en"]
     top = perf["findings"][0]["finding"] if perf["findings"] else "No problem found in the layers this data can show."
     lines = [f"# {tenant} - Performance Audit (imported CSV) - {date}", "",
-             f"**VERDICT:** {_score_line(perf, 'en')}. {top}", ""]
+             *_period_line(perf, "en"), f"**VERDICT:** {_score_line(perf, 'en')}. {top}", ""]
     if score:
         lines += ["## Score components", "| Component | Weight | Score | Evidence |", "|---|---|---|---|"]
         lines += [f"| {t['comp'][k]} | {v['weight']:.0%} | {v['score']:.0f}/100 | {v['evidence']} |"
                   for k, v in score["components"].items()]
         lines += ["", f"Confidence: **{score['confidence']}** ({totals['conversions']:,.0f} conversions in the data)."]
-    lines += ["", "## Campaigns", *_campaign_table(perf, "en", currency), "", "## Top fixes (ranked)"]
+    lines += ["", f"## {NOUN_HEAD[perf['noun']][0]}s", *_campaign_table(perf, "en", currency), "", "## Top fixes (ranked)"]
     lines += [f"{i}. **{f['layer']}**: {f['finding']} Evidence: {f['evidence']}. *{f['confidence']}*. Test: {f['test']}."
               for i, f in enumerate(perf["findings"], 1)] or ["Nothing to fix in this data."]
     acts = build_actions(perf, "en")
     lines += ["", "## 30-day plan", "**Do today:**", *[f"- {a}" for a in acts["today"]],
               "**Test this week:**", *[f"- {a}" for a in acts["test"]],
               "**Stop / reduce:**", *[f"- {a}" for a in acts["stop"]],
-              "", "## Honest limits", *[f"- {x}" for x in t["limits"]],
+              "", "## Honest limits", *[f"- {x}" for x in _basis_note(basis, "en") + t["limits"]],
               f"- A campaign needs at least {MIN_CONV_TO_JUDGE} conversions before it is called a winner or a loser."]
     return "\n".join(lines)
 
 
-def format_report(tenant: str, date: str, perf: dict[str, Any], currency: str | None, lang: str) -> str:
+def format_report(tenant: str, date: str, perf: dict[str, Any], currency: str | None, lang: str,
+                  basis: str | None = None) -> str:
     totals, acts = perf["totals"], build_actions(perf, lang)
     cpa = f"{totals['cpa']:,.2f}" if totals["cpa"] else "-"
     if lang == "ar":
-        lines = [f"# {tenant} - تقرير الأداء - {date}", "",
+        lines = [f"# {tenant} - تقرير الأداء - {date}", "", *_period_line(perf, "ar"),
                  f"**الخلاصة:** الدرجة {_score_line(perf, 'ar')}. أُنفق {_money(totals['cost'], currency)} "
                  f"وحققنا {totals['conversions']:,.0f} تحويلات (CPA {cpa}).", "",
                  "## الأرقام", "| المؤشر | القيمة |", "|---|---|",
                  f"| الإنفاق | {_money(totals['cost'], currency)} |", f"| التحويلات | {totals['conversions']:,.0f} |",
-                 f"| CPA | {cpa} |", f"| CTR | {totals['ctr']:.2f}% |", f"| مرات الظهور | {totals['impressions']:,.0f} |", "",
-                 "## الحملات", *_campaign_table(perf, "ar", currency), "",
+                 f"| CPA | {cpa} |", f"| CTR | {_ctr(perf)} |", f"| مرات الظهور | {totals['impressions']:,.0f} |", "",
+                 f"## {NOUN_HEAD[perf['noun']][1]}", *_campaign_table(perf, "ar", currency), "",
                  "## الإجراءات", "**افعل اليوم:**", *[f"- {a}" for a in acts["today"]],
                  "**اختبر هذا الأسبوع:**", *[f"- {a}" for a in acts["test"]],
                  "**أوقف / قلّل:**", *[f"- {a}" for a in acts["stop"]], "",
-                 "## ملاحظات", *[f"- {x}" for x in T["ar"]["limits"]], "", "*مسودة: تحتاج مراجعة المشغّل قبل إرسالها للعميل.*"]
+                 "## ملاحظات", *[f"- {x}" for x in _basis_note(basis, "ar") + T["ar"]["limits"]], "", "*مسودة: تحتاج مراجعة المشغّل قبل إرسالها للعميل.*"]
     else:
-        lines = [f"# {tenant} - Performance Report - {date}", "",
+        lines = [f"# {tenant} - Performance Report - {date}", "", *_period_line(perf, "en"),
                  f"**VERDICT:** Score {_score_line(perf, 'en')}. {_money(totals['cost'], currency)} spent for "
                  f"{totals['conversions']:,.0f} conversions (CPA {cpa}).", "",
                  "## The numbers", "| Metric | Value |", "|---|---|",
                  f"| Spend | {_money(totals['cost'], currency)} |", f"| Conversions | {totals['conversions']:,.0f} |",
-                 f"| CPA | {cpa} |", f"| CTR | {totals['ctr']:.2f}% |", f"| Impressions | {totals['impressions']:,.0f} |", "",
-                 "## Campaigns", *_campaign_table(perf, "en", currency), "",
+                 f"| CPA | {cpa} |", f"| CTR | {_ctr(perf)} |", f"| Impressions | {totals['impressions']:,.0f} |", "",
+                 f"## {NOUN_HEAD[perf['noun']][0]}s", *_campaign_table(perf, "en", currency), "",
                  "## Actions", "**Do today:**", *[f"- {a}" for a in acts["today"]],
                  "**Test this week:**", *[f"- {a}" for a in acts["test"]],
                  "**Stop / reduce:**", *[f"- {a}" for a in acts["stop"]], "",
-                 "## Notes", *[f"- {x}" for x in T["en"]["limits"]], "", "*Draft: operator review needed before it goes to the client.*"]
+                 "## Notes", *[f"- {x}" for x in _basis_note(basis, "en") + T["en"]["limits"]], "", "*Draft: operator review needed before it goes to the client.*"]
     return "\n".join(lines)
 
 
@@ -165,9 +188,9 @@ def format_whatsapp(tenant: str, date: str, perf: dict[str, Any], currency: str 
         return "\n".join([f"*ملخص الأداء - {tenant}* ({date})", "",
                           f"📌 *الخلاصة:* الدرجة {_score_line(perf, 'ar')}", "",
                           f"• الإنفاق: {_money(totals['cost'], currency)}", f"• التحويلات: {totals['conversions']:,.0f} (CPA {cpa})",
-                          f"• CTR: {totals['ctr']:.2f}%", "", "*افعل اليوم:*", *[f"• {a}" for a in acts["today"]],
+                          f"• CTR: {_ctr(perf)}", "", "*افعل اليوم:*", *[f"• {a}" for a in acts["today"]],
                           "*أوقف / قلّل:*", *[f"• {a}" for a in acts["stop"]]])
     return "\n".join([f"*{tenant} - Performance Digest* ({date})", "", f"📌 *VERDICT:* Score {_score_line(perf, 'en')}", "",
                       f"• Spend: {_money(totals['cost'], currency)}", f"• Conversions: {totals['conversions']:,.0f} (CPA {cpa})",
-                      f"• CTR: {totals['ctr']:.2f}%", "", "*Do today:*", *[f"• {a}" for a in acts["today"]],
+                      f"• CTR: {_ctr(perf)}", "", "*Do today:*", *[f"• {a}" for a in acts["today"]],
                       "*Stop / reduce:*", *[f"• {a}" for a in acts["stop"]]])

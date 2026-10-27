@@ -20,15 +20,19 @@ ARABIC_DIGITS = str.maketrans("٠١٢٣٤٥٦٧٨٩٫٬", "0123456789.,")
 
 # field -> accepted normalised headers, best first (parentheses stripped, lower case).
 ALIASES: dict[str, tuple[str, ...]] = {
-    "name": ("campaign name", "campaign", "name", "اسم الحملة", "الحملة", "الحملة الإعلانية"),
-    "status": ("campaign status", "campaign delivery", "delivery", "status", "التسليم", "حالة الحملة", "الحالة"),
-    "budget": ("daily budget", "budget", "الميزانية اليومية", "الميزانية"),
+    "name": ("campaign name", "campaign", "ad set name", "ad name", "name", "اسم الحملة", "الحملة",
+             "الحملة الإعلانية", "اسم المجموعة الإعلانية"),
+    "indicator": ("result indicator", "مؤشر النتيجة"),
+    "status": ("campaign status", "campaign delivery", "ad set delivery", "ad delivery", "delivery", "status", "التسليم", "حالة الحملة", "الحالة"),
+    "budget": ("daily budget", "ad set budget", "budget", "الميزانية اليومية", "الميزانية"),
     "spend": ("amount spent", "cost", "spend", "المبلغ المنفق", "التكلفة", "الإنفاق"),
     "impressions": ("impressions", "impr.", "impr", "مرات الظهور", "مرات الإظهار"),
     "clicks": ("clicks", "link clicks", "النقرات", "نقرات الرابط"),
     "conversions": ("conversions", "conv.", "purchases", "website purchases", "results",
                     "التحويلات", "المشتريات", "النتائج"),
 }
+NON_CONVERSION_RESULTS = {"link_click", "reach", "impressions", "post_engagement", "video_view", "landing_page_view"}
+LEVELS = {"ad set name": "ad set", "ad name": "ad", "اسم المجموعة الإعلانية": "ad set"}
 PAUSED_WORDS = {"paused", "inactive", "off", "removed", "ended", "completed", "archived", "deleted",
                 "مؤقت", "متوقف", "غير نشط", "مكتمل"}
 SKIP_NAME = re.compile(r"^(total|totals|grand total|account total|إجمالي|المجموع)\s*(:.*)?$", re.I)
@@ -135,6 +139,41 @@ def _aggregate(rows: list[dict[str, Any]]) -> tuple[list[dict[str, Any]], bool]:
     return list(merged.values()), len(merged) != len(rows)
 
 
+def _unique_names(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Ad set names repeat across campaigns; they are different rows, so number the repeats instead of merging."""
+    seen: dict[str, int] = {}
+    for row in rows:
+        seen[row["name"]] = seen.get(row["name"], 0) + 1
+        if seen[row["name"]] > 1:
+            row["name"] = f"{row['name']} ({seen[row['name']]})"
+    return rows
+
+
+def _conversions_basis(headers: list[str], body: list[list[str]], mapping: dict[str, int]) -> str | None:
+    """What 'Results' counts: the single result type, or 'mixed' / 'unknown' / 'non_conversion'. None if no Results column."""
+    if "conversions" not in mapping or _norm(headers[mapping["conversions"]]) not in ("results", "النتائج"):
+        return None
+    if "indicator" not in mapping:
+        return "unknown"
+    kinds = {r[mapping["indicator"]].split(":")[-1].strip() for r in body
+             if mapping["indicator"] < len(r) and r[mapping["indicator"]].strip()}
+    kinds.discard("")
+    if len(kinds) != 1:
+        return "mixed" if kinds else "unknown"
+    kind = next(iter(kinds))
+    return "non_conversion" if kind in NON_CONVERSION_RESULTS else kind
+
+
+def _period(headers: list[str], body: list[list[str]]) -> str | None:
+    """'2026-09-27 to 2026-10-26' from Meta's Reporting starts / ends columns, when present."""
+    cols = {_norm(h): i for i, h in enumerate(headers)}
+    if "reporting starts" not in cols or "reporting ends" not in cols:
+        return None
+    starts = [r[cols["reporting starts"]] for r in body if cols["reporting starts"] < len(r) and r[cols["reporting starts"]]]
+    ends = [r[cols["reporting ends"]] for r in body if cols["reporting ends"] < len(r) and r[cols["reporting ends"]]]
+    return f"{min(starts)} to {max(ends)}" if starts and ends else None
+
+
 def _finish(row: dict[str, Any]) -> dict[str, Any]:
     row["ctr"] = row["clicks"] / row["impressions"] * 100.0 if row["impressions"] > 0 else 0.0
     row["cpa"] = row["cost"] / row["conversions"] if row["conversions"] > 0 else None
@@ -143,7 +182,7 @@ def _finish(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def _warnings(headers: list[str], mapping: dict[str, int], rows: list[dict[str, Any]], aggregated: bool,
-              currencies: set[str]) -> list[str]:
+              currencies: set[str], level: str, basis: str | None) -> list[str]:
     out: list[str] = []
     labels = {"spend": "spend", "impressions": "impressions", "clicks": "clicks", "conversions": "conversions"}
     for field, label in labels.items():
@@ -152,9 +191,13 @@ def _warnings(headers: list[str], mapping: dict[str, int], rows: list[dict[str, 
                        f"{label.capitalize()} shows as 0 for every row, so do not trust totals or CPA.")
     if "spend" in mapping and rows and not any(r["cost"] for r in rows):
         out.append("The spend column is present but every value is empty or zero. Check the export date range.")
-    if "conversions" in mapping and _norm(headers[mapping["conversions"]]) in ("results", "النتائج"):
-        out.append("'Results' depends on each campaign's objective (messages, leads, clicks, purchases). "
-                   "Check 'Result indicator' before comparing CPA across campaigns.")
+    if level != "campaign":
+        out.append(f"This is an {level}-level export: each row is an {level}, not a campaign. "
+                   "Calls and the score are per " + level + ".")
+    if basis in ("mixed", "unknown", "non_conversion"):
+        out.append("'Results' counts a different thing per objective (messages, leads, clicks, purchases"
+                   + (", reach or clicks here" if basis == "non_conversion" else "")
+                   + "). Roles never say Scale on it; export a purchase or lead column to unlock that.")
     if len(currencies) > 1:
         out.append(f"The file mixes currencies ({', '.join(sorted(currencies))}); totals add them together as if "
                    "they were one currency. Export one currency at a time.")
@@ -195,11 +238,14 @@ def parse_export(path: Path) -> dict[str, Any]:
         })
     if not rows:
         raise ValueError("The file has a header but no campaign rows (only totals or blank lines).")
-    rows, aggregated = _aggregate(rows)
+    level = LEVELS.get(_norm(headers[mapping["name"]]), "campaign")
+    rows, aggregated = _aggregate(rows) if level == "campaign" else (_unique_names(rows), False)
     currencies = _currencies(headers, body, mapping)
+    basis = _conversions_basis(headers, body, mapping)
     return {
+        "level": level, "conversions_basis": basis, "period": _period(headers, body),
         "rows": [_finish(r) for r in rows],
-        "warnings": _warnings(headers, mapping, rows, aggregated, currencies),
+        "warnings": _warnings(headers, mapping, rows, aggregated, currencies, level, basis),
         "columns": {f: headers[i] for f, i in mapping.items()},
         "currency": next(iter(currencies)) if len(currencies) == 1 else None,
     }

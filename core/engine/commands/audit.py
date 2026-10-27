@@ -268,9 +268,9 @@ def format_audit(tenant: TenantContext, snap: dict, audit: dict) -> str:
 def _run_csv(tenant: TenantContext, opts: dict | None, snap: dict) -> int:
     """CSV mode: no credentials by design, so grade the imported campaign data instead of the setup."""
     ad = snap["ad_report"]
-    analysis = perf.analyse(perf.rows_from_report(ad), resolve_target_cpa(tenant, opts),
-                            ad["conversions_from_results"])
-    report = perf_text.format_audit(tenant.name, snap["now"].strftime("%Y-%m-%d %H:%M"), analysis, ad["currency"])
+    analysis = perf.analyse_report(ad, resolve_target_cpa(tenant, opts))
+    report = perf_text.format_audit(tenant.name, snap["now"].strftime("%Y-%m-%d %H:%M"), analysis, ad["currency"],
+                                    ad["conversions_basis"])
     report_path = tenant.reports_dir / f"{snap['now'].strftime('%Y-%m-%d-%H')}-audit.md"
     report_path.write_text(report, encoding="utf-8")
     score = analysis["score"]

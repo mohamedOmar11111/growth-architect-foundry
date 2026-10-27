@@ -119,3 +119,38 @@ def test_tenant_with_connected_accounts_keeps_the_setup_audit(tmp_path):
     run("campaigns", "import", "--file", str(tmp_path / "e.csv"))
     out = json.loads(run("account", "audit", "--json").stdout)
     assert out["data"].get("mode") != "csv"
+
+
+def test_paused_rows_stay_in_totals_but_are_never_actioned():
+    rows = [dict(row("Live", 500, 50), status="ENABLED"), dict(row("Old", 400, 4), status="PAUSED"),
+            dict(row("Dead", 300, 0), status="PAUSED")]
+    got = analyse(rows)
+    assert got["totals"]["cost"] == 1200
+    assert got["by_role"]["waste"] == [] and got["by_role"]["loser"] == []
+    assert all(f["layer"] != "Campaign efficiency" for f in got["findings"])
+
+
+def test_missing_clicks_column_drops_ctr_instead_of_reporting_zero():
+    got = analyse([row("A", 500, 50, impr=100000, clicks=0), row("B", 500, 40, impr=90000, clicks=0)], has_clicks=False)
+    assert "traffic" not in got["score"]["components"]
+    assert abs(sum(c["weight"] for c in got["score"]["components"].values()) - 1.0) < 1e-9
+    assert all(f["layer"] != "Traffic quality" for f in got["findings"])
+
+
+def test_adset_export_without_clicks_like_a_real_meta_download(tmp_path):
+    """Header copied from a real Meta ad-set export (generic names): no clicks column, repeated ad set names,
+    campaign-budget text in the budget column, one result type."""
+    from commands.csv_import import parse_export
+    text = (
+        '"Reporting starts","Reporting ends","Ad set name","Ad set delivery","Results","Result indicator",'
+        '"Ad set budget","Ad set budget type","Amount spent (AED)",Impressions\n'
+        '2026-09-27,2026-10-26,"Ad set A",active,10225,actions:mobile_app_install,70,Daily,2258,1180575\n'
+        '2026-09-27,2026-10-26,"Ad set A",inactive,2796,actions:mobile_app_install,"Using campaign budget",0,1058.43,573724\n')
+    path = tmp_path / "adsets.csv"
+    path.write_text(text, encoding="utf-8")
+    got = parse_export(path)
+    assert [r["name"] for r in got["rows"]] == ["Ad set A", "Ad set A (2)"]
+    assert got["level"] == "ad set" and got["period"] == "2026-09-27 to 2026-10-26"
+    assert got["conversions_basis"] == "mobile_app_install" and got["currency"] == "AED"
+    assert got["rows"][1]["status"] == "PAUSED" and got["rows"][1]["budget"] == 0
+    assert any("No clicks column" in w for w in got["warnings"])

@@ -61,7 +61,8 @@ def _concentration_score(top_share: float, n: int) -> float:
     return 100.0 if top_share <= 0.5 else 75.0 if top_share <= CONCENTRATION_RISK else 50.0 if top_share <= 0.85 else 25.0
 
 
-def _score(rows: list[dict[str, Any]], totals: dict[str, Any], target_cpa: float | None) -> dict[str, Any] | None:
+def _score(rows: list[dict[str, Any]], totals: dict[str, Any], target_cpa: float | None,
+           has_clicks: bool = True) -> dict[str, Any] | None:
     if totals["conversions"] == 0 or totals["cost"] == 0:
         return None
     spend = totals["cost"]
@@ -81,11 +82,15 @@ def _score(rows: list[dict[str, Any]], totals: dict[str, Any], target_cpa: float
         "traffic": (_ctr_score(totals["ctr"]), f"{totals['ctr']:.2f}% CTR overall"),
         "concentration": (_concentration_score(top_share, len(rows)), f"top campaign takes {top_share:.0%} of spend"),
     }
-    total = sum(parts[k][0] * WEIGHTS[k] for k in WEIGHTS)
+    if not has_clicks:     # no clicks column: CTR is unknown, so drop that component and re-weight the rest
+        del parts["traffic"]
+    weights = {k: WEIGHTS[k] for k in parts}
+    total = sum(parts[k][0] * weights[k] for k in parts) / sum(weights.values())
     conv = totals["conversions"]
     confidence = "low" if conv < CONFIDENCE_LOW else "medium" if conv < CONFIDENCE_MEDIUM else "high"
     return {"total": total, "grade": _grade(total), "confidence": confidence,
-            "components": {k: {"weight": WEIGHTS[k], "score": v[0], "evidence": v[1]} for k, v in parts.items()}}
+            "components": {k: {"weight": weights[k] / sum(weights.values()), "score": v[0], "evidence": v[1]}
+                           for k, v in parts.items()}}
 
 
 def _finding(layer: str, finding: str, evidence: str, confidence: str, likelihood: str, test: str) -> dict[str, str]:
@@ -99,30 +104,30 @@ def _names(rows: list[dict[str, Any]], limit: int = 3) -> str:
 
 
 def _findings(totals: dict[str, Any], by_role: dict[str, list], rows: list[dict[str, Any]],
-              target_cpa: float | None) -> list[dict[str, str]]:
+              target_cpa: float | None, has_clicks: bool = True, noun: str = "campaign") -> list[dict[str, str]]:
     out: list[dict[str, str]] = []
     spend = totals["cost"]
     if spend > 0 and totals["conversions"] == 0:
         out.append(_finding(
             "Conversion tracking", "Money is being spent and not one conversion is recorded in this export.",
-            f"{spend:,.2f} spent, 0 conversions across {len(rows)} campaign(s)", "hypothesis: verify the export has the conversion column",
+            f"{spend:,.2f} spent, 0 conversions across {len(rows)} {noun}(s)", "hypothesis: verify the export has the conversion column",
             "certain", "Check the conversion event fires and that the export includes the results/conversions column, before touching bids"))
         return out
     if by_role["waste"]:
         waste = by_role["waste"]
         lost = sum(r["cost"] for r in waste)
         out.append(_finding(
-            "Campaign efficiency", f"{len(waste)} campaign(s) spent heavily with no conversions: {_names(waste)}.",
+            "Campaign efficiency", f"{len(waste)} {noun}(s) spent heavily with no conversions: {_names(waste)}.",
             f"{lost:,.2f} spent ({lost / spend:.0%} of total) and 0 conversions", "confirmed by data", "certain",
             "Confirm tracking is live for these campaigns, then pause them or cut their budget by 20%"))
     if by_role["loser"]:
         loser = by_role["loser"]
         out.append(_finding(
-            "Campaign efficiency", f"{len(loser)} campaign(s) cost far more per conversion than the rest: {_names(loser)}.",
+            "Campaign efficiency", f"{len(loser)} {noun}(s) cost far more per conversion than the rest: {_names(loser)}.",
             f"CPA above {'target' if target_cpa else 'the account average'} by more than "
             f"{(LOSER_VS_TARGET if target_cpa else LOSER_VS_REFERENCE) - 1:.0%}", "confirmed by data", "high",
             "Cut their budget by 20% and move it to the best campaign; re-read CPA in 7 days"))
-    if totals["ctr"] < WEAK_CTR and totals["impressions"] >= 1000:
+    if has_clicks and totals["ctr"] < WEAK_CTR and totals["impressions"] >= 1000:
         out.append(_finding(
             "Traffic quality", f"Overall CTR is {totals['ctr']:.2f}%: the ads are not earning the click.",
             f"{totals['clicks']:,.0f} clicks on {totals['impressions']:,.0f} impressions", "confirmed by data", "high",
@@ -153,8 +158,14 @@ def rows_from_report(ad_report: dict[str, Any]) -> list[dict[str, Any]]:
              "conversions": r.get("conversions") or 0.0} for r in ad_report["rows"]]
 
 
-def analyse(rows: list[dict[str, Any]], target_cpa: float | None = None,
-            results_based: bool = False) -> dict[str, Any]:
+def analyse_report(ad: dict[str, Any], target_cpa: float | None) -> dict[str, Any]:
+    """analyse() driven by a parsed ad report (state.read_ad_report), so every command reads the same facts."""
+    return analyse(rows_from_report(ad), target_cpa, results_based=ad["conversions_from_results"],
+                   has_clicks=ad["has_clicks"], noun=ad["level"], period=ad["period"])
+
+
+def analyse(rows: list[dict[str, Any]], target_cpa: float | None = None, results_based: bool = False,
+            has_clicks: bool = True, noun: str = "campaign", period: str | None = None) -> dict[str, Any]:
     """rows: campaign dicts with name, cost, impressions, clicks, conversions. Only rows with spend are judged.
 
     results_based: conversions came from Meta's "Results" column, which mixes objectives (reach, clicks, messages,
@@ -166,14 +177,18 @@ def analyse(rows: list[dict[str, Any]], target_cpa: float | None = None,
         r["role"] = _role(r, ref, target_cpa is not None)
         if results_based and r["role"] == "winner":
             r["role"] = "ok"
+        r["paused"] = str(r.get("status", "")).upper() == "PAUSED"   # history only: nothing to act on
         r["share"] = r["cost"] / totals["cost"] if totals["cost"] else 0.0
-    by_role = {k: [r for r in live if r["role"] == k] for k in ("waste", "loser", "winner", "thin", "ok", "unjudged")}
-    findings = _findings(totals, by_role, live, target_cpa) if live else []
+    # roles feed findings and actions, so only rows that are still running count; paused rows stay in the totals and score
+    by_role = {k: [r for r in live if r["role"] == k and not r["paused"]]
+               for k in ("waste", "loser", "winner", "thin", "ok", "unjudged")}
+    findings = _findings(totals, by_role, live, target_cpa, has_clicks, noun) if live else []
     if results_based and live:
         findings.append(_finding(
             "Evidence", "Conversions come from Meta's Results column, which counts a different thing per campaign objective.",
             "Results can be reach, clicks, messages or purchases", "confirmed by data", "medium",
             "Export with a purchase or lead column (or check Result indicator) before scaling any campaign"))
     return {"totals": totals, "campaigns": sorted(live, key=lambda r: r["cost"], reverse=True), "by_role": by_role,
-            "findings": findings, "score": _score(live, totals, target_cpa) if live else None,
+            "findings": findings, "score": _score(live, totals, target_cpa, has_clicks) if live else None,
+            "has_clicks": has_clicks, "noun": noun, "period": period,
             "target_cpa": target_cpa, "skipped_no_spend": len(rows) - len(live)}

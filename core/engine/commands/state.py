@@ -108,7 +108,12 @@ def read_ad_report(tenant: TenantContext) -> dict[str, Any] | None:
     text = path.read_text(encoding="utf-8")
     scope = next((ln for ln in text.splitlines() if ln.startswith("Scope: imported from")), "")
     currency = re.search(r"currency ([A-Z]{3})\b", scope)
-    from_results = "conversions <- `Results`" in text or "conversions <- `النتائج`" in text
+    basis = re.search(r"Conversions basis: ([^.\n]+)\.", text)
+    basis_name = basis.group(1) if basis else None
+    level = re.search(r"Row level: ([a-z ]+)\.", text)
+    period = re.search(r"period (\d{4}-\d{2}-\d{2} to \d{4}-\d{2}-\d{2})", scope)
+    # Results of one real conversion type (e.g. mobile_app_install) are trusted; mixed/unknown ones are not.
+    from_results = basis_name in ("mixed", "unknown", "non_conversion")
     for line in text.splitlines():
         if not line.startswith("|"):
             continue
@@ -152,6 +157,10 @@ def read_ad_report(tenant: TenantContext) -> dict[str, Any] | None:
         "source": "csv" if scope else "live",
         "currency": currency.group(1) if currency else None,
         "conversions_from_results": from_results,
+        "conversions_basis": basis_name,
+        "level": level.group(1) if level else "campaign",
+        "period": period.group(1) if period else None,
+        "has_clicks": "clicks <-" in text or not scope,   # an export without a clicks column has unknown CTR, not 0%
         "age_days": _report_age_days(path),
         "rows": rows,
         "totals": {
