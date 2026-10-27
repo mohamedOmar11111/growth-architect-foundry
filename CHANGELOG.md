@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+- **Fix:** `campaigns import` now reads real export shapes: title lines above the header, `Amount spent (USD)`-style
+  headers, `--` cells, `Total:` rows, UTF-16/tab and `;` files, Arabic column names and digits, ad-set-level rows
+  (summed per campaign). Unrecognised spend/impressions/clicks/conversions columns now warn in the report instead of a
+  silent 0, and the report lists the columns used and the currency.
+- **New: CSV mode.** After `campaigns import`, with no credentials configured, `account audit`, `account diagnose`
+  and `account report` judge the imported data instead of the setup: a 0-100 performance score with named components
+  (withheld when there are no conversions; marked provisional under 30), per-campaign calls (Scale / Keep / Too early /
+  Cut / Stop), ranked findings, and Do today / Test this week / Stop actions. The client report and WhatsApp digest
+  come in English and Arabic. Heuristics are fixed and listed in `commands/perf.py`; a campaign needs 10 conversions
+  before it is called a winner or loser. `diagnose` also ranks a finding confirmed by data above a hypothesis.
+
 ## 1.4.3
 - **Fix (found on a real read-only Meta pull):** messaging campaigns always reported 0 conversions,
   because `messaging_conversation_started_7d` was not counted, and `offsite_conversion` matched only the
