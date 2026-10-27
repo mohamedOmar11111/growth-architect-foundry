@@ -14,6 +14,7 @@ from re-parsing frontmatter its own way.
 from __future__ import annotations
 
 import datetime
+import math
 import re
 from pathlib import Path
 from typing import Any
@@ -104,7 +105,16 @@ def read_ad_report(tenant: TenantContext) -> dict[str, Any] | None:
     path = reports[-1]
     is_live_pull = path.name.endswith("-live-pull.md")
     rows: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    text = path.read_text(encoding="utf-8")
+    scope = next((ln for ln in text.splitlines() if ln.startswith("Scope: imported from")), "")
+    currency = re.search(r"currency ([A-Z]{3})\b", scope)
+    basis = re.search(r"Conversions basis: ([^.\n]+)\.", text)
+    basis_name = basis.group(1) if basis else None
+    level = re.search(r"Row level: ([a-z ]+)\.", text)
+    period = re.search(r"period (\d{4}-\d{2}-\d{2} to \d{4}-\d{2}-\d{2})", scope)
+    # Results of one real conversion type (e.g. mobile_app_install) are trusted; mixed/unknown ones are not.
+    from_results = basis_name in ("mixed", "unknown", "non_conversion")
+    for line in text.splitlines():
         if not line.startswith("|"):
             continue
         cells = [c.strip() for c in line.strip("|").split("|")]
@@ -144,6 +154,14 @@ def read_ad_report(tenant: TenantContext) -> dict[str, Any] | None:
     total_conversions = sum(r["conversions"] or 0.0 for r in rows)
     return {
         "path": path,
+        "source": "csv" if scope else "live",
+        "currency": currency.group(1) if currency else None,
+        "conversions_from_results": from_results,
+        "conversions_basis": basis_name,
+        "level": level.group(1) if level else "campaign",
+        "period": period.group(1) if period else None,
+        "has_clicks": "clicks <-" in text or not scope,   # an export without a clicks column has unknown CTR, not 0%
+        "age_days": _report_age_days(path),
         "rows": rows,
         "totals": {
             "cost": total_cost,
@@ -208,6 +226,27 @@ def config_status(env: dict[str, str]) -> dict[str, Any]:
     return status
 
 
+CSV_MODE_MAX_AGE_DAYS = 30
+
+
+def _report_age_days(path: Path) -> int:
+    """Days since the report's YYYY-MM-DD filename prefix (0 when the name carries no date)."""
+    try:
+        return (datetime.date.today() - datetime.date.fromisoformat(path.name[:10])).days
+    except ValueError:
+        return 0
+
+
+def resolve_target_cpa(tenant: TenantContext, opts: dict | None) -> float | None:
+    """--target-cpa wins over TARGET_CPA in the tenant .env; anything unparsable counts as unset."""
+    raw = (opts or {}).get("target_cpa") or tenant.env.get(TARGET_CPA_KEY)
+    try:
+        value = float(raw) if raw is not None else None
+    except (TypeError, ValueError):
+        return None
+    return value if value is not None and math.isfinite(value) and value > 0 else None
+
+
 def collect_snapshot(tenant: TenantContext) -> dict[str, Any]:
     """Everything the command layer needs about one tenant, parsed once."""
     now = datetime.datetime.now()
@@ -223,7 +262,7 @@ def collect_snapshot(tenant: TenantContext) -> dict[str, Any]:
             continue
         oldest_open_age = max(oldest_open_age, (now - when).days)
 
-    return {
+    snapshot = {
         "now": now,
         "tenant": tenant,
         "signals": signals,
@@ -243,3 +282,8 @@ def collect_snapshot(tenant: TenantContext) -> dict[str, Any]:
         "strategy_headers": strategy_headers(tenant.strategy_md),
         "config": config_status(tenant.env),
     }
+    ad = snapshot["ad_report"]
+    # CSV mode only when the user has NOT connected any ad account and the import is recent.
+    snapshot["csv_mode"] = bool(ad and ad["source"] == "csv" and ad["age_days"] <= CSV_MODE_MAX_AGE_DAYS
+                                and not any(g["ready"] for g in snapshot["config"]["groups"].values()))
+    return snapshot

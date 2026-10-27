@@ -23,7 +23,8 @@ import sys
 
 from tenant import TenantContext
 from utils import append_log
-from commands.state import collect_snapshot, operator_name
+from commands.state import collect_snapshot, operator_name, resolve_target_cpa
+from commands import perf, perf_text
 
 PERIOD_DAYS = {"week": 7, "month": 30}
 
@@ -279,6 +280,23 @@ def format_whatsapp_report(tenant: TenantContext, snap: dict, data: dict,
     return "\n".join(lines)
 
 
+def _run_csv(tenant: TenantContext, opts: dict, snap: dict, lang: str, fmt: str) -> int:
+    """CSV mode: a client-facing performance readout from the imported export, not the operator queue."""
+    ad = snap["ad_report"]
+    analysis = perf.analyse_report(ad, resolve_target_cpa(tenant, opts))
+    date = snap["now"].strftime("%Y-%m-%d")
+    if fmt == "whatsapp":
+        report, suffix = perf_text.format_whatsapp(tenant.name, date, analysis, ad["currency"], lang), f"-report-{lang}-whatsapp.txt"
+    else:
+        report, suffix = perf_text.format_report(tenant.name, date, analysis, ad["currency"], lang, ad["conversions_basis"]), f"-report-{lang}.md"
+    report_path = tenant.reports_dir / f"{snap['now'].strftime('%Y-%m-%d-%H')}{suffix}"
+    report_path.write_text(report, encoding="utf-8")
+    print(report)
+    print(f"\n[{tenant.name}] report: written -> {report_path} — DRAFT, needs operator review before it goes to the client.")
+    append_log(tenant.name, "report", f"CSV performance report generated ({lang})", report_path)
+    return 0
+
+
 def run(tenant: TenantContext, opts: dict | None = None) -> int:
     opts = opts or {}
     lang = str(opts.get("lang") or "en").lower()
@@ -296,6 +314,8 @@ def run(tenant: TenantContext, opts: dict | None = None) -> int:
         return 2
 
     snap = collect_snapshot(tenant)
+    if snap["csv_mode"]:
+        return _run_csv(tenant, opts, snap, lang, fmt)
     data = build_report_data(snap, days)
     if fmt == "whatsapp":
         report = format_whatsapp_report(tenant, snap, data, lang, period, days)
