@@ -104,7 +104,10 @@ def read_ad_report(tenant: TenantContext) -> dict[str, Any] | None:
     path = reports[-1]
     is_live_pull = path.name.endswith("-live-pull.md")
     rows: list[dict[str, Any]] = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    text = path.read_text(encoding="utf-8")
+    scope = next((ln for ln in text.splitlines() if ln.startswith("Scope: imported from")), "")
+    currency = re.search(r"currency ([A-Z]{3})\b", scope)
+    for line in text.splitlines():
         if not line.startswith("|"):
             continue
         cells = [c.strip() for c in line.strip("|").split("|")]
@@ -144,6 +147,8 @@ def read_ad_report(tenant: TenantContext) -> dict[str, Any] | None:
     total_conversions = sum(r["conversions"] or 0.0 for r in rows)
     return {
         "path": path,
+        "source": "csv" if scope else "live",
+        "currency": currency.group(1) if currency else None,
         "rows": rows,
         "totals": {
             "cost": total_cost,
@@ -208,6 +213,15 @@ def config_status(env: dict[str, str]) -> dict[str, Any]:
     return status
 
 
+def resolve_target_cpa(tenant: TenantContext, opts: dict | None) -> float | None:
+    """--target-cpa wins over TARGET_CPA in the tenant .env; anything unparsable counts as unset."""
+    raw = (opts or {}).get("target_cpa") or tenant.env.get(TARGET_CPA_KEY)
+    try:
+        return float(raw) if raw is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
 def collect_snapshot(tenant: TenantContext) -> dict[str, Any]:
     """Everything the command layer needs about one tenant, parsed once."""
     now = datetime.datetime.now()
@@ -223,7 +237,7 @@ def collect_snapshot(tenant: TenantContext) -> dict[str, Any]:
             continue
         oldest_open_age = max(oldest_open_age, (now - when).days)
 
-    return {
+    snapshot = {
         "now": now,
         "tenant": tenant,
         "signals": signals,
@@ -243,3 +257,7 @@ def collect_snapshot(tenant: TenantContext) -> dict[str, Any]:
         "strategy_headers": strategy_headers(tenant.strategy_md),
         "config": config_status(tenant.env),
     }
+    ad = snapshot["ad_report"]
+    snapshot["csv_mode"] = bool(ad and ad["source"] == "csv"
+                                and not all(g["ready"] for g in snapshot["config"]["groups"].values()))
+    return snapshot

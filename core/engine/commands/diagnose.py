@@ -24,23 +24,14 @@ from typing import Any
 
 from tenant import TenantContext
 from utils import append_log
-from commands.state import collect_snapshot, TARGET_CPA_KEY
+from commands.state import collect_snapshot, resolve_target_cpa, TARGET_CPA_KEY
+from commands import perf
 
 CTR_WEAK = 1.0
 CTR_ACCEPTABLE = 3.0
 CTR_STRONG = 5.0
 CPA_OVER_TARGET_TOLERANCE = 1.20
 MIN_IMPRESSIONS_FOR_VERDICT = 1000
-
-
-def _resolve_target_cpa(tenant: TenantContext, opts: dict | None) -> float | None:
-    raw = (opts or {}).get("target_cpa") or tenant.env.get(TARGET_CPA_KEY)
-    if raw is None:
-        return None
-    try:
-        return float(raw)
-    except (TypeError, ValueError):
-        return None
 
 
 def _ctr_verdict(ctr: float) -> tuple[str, str]:
@@ -60,14 +51,16 @@ def build_diagnosis(snap: dict, target_cpa: float | None) -> dict:
     ladder: list[dict[str, Any]] = []
 
     cfg = snap["config"]
+    csv_mode = snap.get("csv_mode", False)   # imported CSV, no credentials: judge the data, not the plumbing
     config_ready = all(g["ready"] for g in cfg["groups"].values())
     ladder.append({
         "layer": "Tracking / config",
-        "reading": f"{sum(g['configured'] for g in cfg['groups'].values())}"
+        "reading": "CSV mode: no credentials needed" if csv_mode else
+                   f"{sum(g['configured'] for g in cfg['groups'].values())}"
                    f"/{sum(g['required'] for g in cfg['groups'].values())} credentials configured",
-        "verdict": "pass" if config_ready else "fail",
+        "verdict": "n/a" if csv_mode else "pass" if config_ready else "fail",
     })
-    if not config_ready:
+    if not config_ready and not csv_mode:
         findings.append({
             "layer": "Tracking / config",
             "finding": (
@@ -81,7 +74,7 @@ def build_diagnosis(snap: dict, target_cpa: float | None) -> dict:
                     "<tenant>`, confirm a report lands in 04_Reports/",
         })
 
-    if snap["high_unprocessed"]:
+    if snap["high_unprocessed"] and not csv_mode:
         findings.append({
             "layer": "Ops",
             "finding": (
@@ -95,7 +88,7 @@ def build_diagnosis(snap: dict, target_cpa: float | None) -> dict:
             "likelihood": "certain",
             "test": "Link or discard every high-priority signal today, re-run `audit`",
         })
-    if snap["stuck_tasks"]:
+    if snap["stuck_tasks"] and not csv_mode:
         findings.append({
             "layer": "Ops",
             "finding": f"{len(snap['stuck_tasks'])} task(s) are stuck at max attempts — "
@@ -224,9 +217,16 @@ def build_diagnosis(snap: dict, target_cpa: float | None) -> dict:
                 "verdict": "pass",
             })
 
+    if csv_mode and ad is not None:
+        analysis = perf.analyse(perf.rows_from_report(ad), target_cpa)
+        covered = {"Traffic quality", "Conversion"}   # the ladder above already reports these
+        findings += [f for f in analysis["findings"] if f["layer"] not in covered]
+
     ranked = sorted(
         findings,
-        key=lambda f: {"certain": 3, "high": 2, "medium": 1}.get(f["likelihood"].split()[0], 1),
+        # likelihood first; at equal likelihood a finding confirmed by data outranks a hypothesis
+        key=lambda f: ({"certain": 3, "high": 2, "medium": 1}.get(f["likelihood"].split()[0], 1),
+                       f["confidence"].startswith("confirmed")),
         reverse=True,
     )
     bottleneck = ranked[0]["layer"] if ranked else "none — every layer passes"
@@ -286,7 +286,7 @@ def format_diagnosis(tenant: TenantContext, snap: dict, diag: dict,
 
 def run(tenant: TenantContext, opts: dict | None = None) -> int:
     snap = collect_snapshot(tenant)
-    target_cpa = _resolve_target_cpa(tenant, opts)
+    target_cpa = resolve_target_cpa(tenant, opts)
     diag = build_diagnosis(snap, target_cpa)
     report = format_diagnosis(tenant, snap, diag, target_cpa)
 

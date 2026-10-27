@@ -20,7 +20,8 @@ import datetime
 
 from tenant import TenantContext
 from utils import append_log
-from commands.state import collect_snapshot
+from commands.state import collect_snapshot, resolve_target_cpa
+from commands import perf, perf_text
 
 REQUIRED_STRATEGY_SECTIONS = (
     "brand overview", "target audience", "voice", "active directives",
@@ -264,8 +265,33 @@ def format_audit(tenant: TenantContext, snap: dict, audit: dict) -> str:
     return "\n".join(lines)
 
 
+def _run_csv(tenant: TenantContext, opts: dict | None, snap: dict) -> int:
+    """CSV mode: no credentials by design, so grade the imported campaign data instead of the setup."""
+    ad = snap["ad_report"]
+    analysis = perf.analyse(perf.rows_from_report(ad), resolve_target_cpa(tenant, opts))
+    report = perf_text.format_audit(tenant.name, snap["now"].strftime("%Y-%m-%d %H:%M"), analysis, ad["currency"])
+    report_path = tenant.reports_dir / f"{snap['now'].strftime('%Y-%m-%d-%H')}-audit.md"
+    report_path.write_text(report, encoding="utf-8")
+    score = analysis["score"]
+    if opts is not None:
+        opts.get("_extra", {})["_data"] = {
+            "mode": "csv", "total": score["total"] if score else None, "grade": score["grade"] if score else None,
+            "confidence": score["confidence"] if score else None, "totals": analysis["totals"],
+            "campaigns": [{"name": c["name"], "role": c["role"], "cost": c["cost"], "conversions": c["conversions"]}
+                          for c in analysis["campaigns"]],
+            "findings": analysis["findings"], "actions": perf_text.build_actions(analysis, "en")}
+    print(report)
+    print(f"\n[{tenant.name}] audit: report written -> {report_path}")
+    append_log(tenant.name, "audit",
+               "CSV performance audit " + (f"scored {score['total']:.0f}/100 (grade {score['grade']})" if score
+                                           else "has no score (no conversions)"), report_path)
+    return 0
+
+
 def run(tenant: TenantContext, opts: dict | None = None) -> int:
     snap = collect_snapshot(tenant)
+    if snap["csv_mode"]:
+        return _run_csv(tenant, opts, snap)
     audit = build_audit(snap)
     report = format_audit(tenant, snap, audit)
 
