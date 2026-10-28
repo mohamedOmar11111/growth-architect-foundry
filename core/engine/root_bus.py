@@ -25,7 +25,7 @@ from paths import WORKSPACE as HQ_ROOT, SIGNALS_DIR, TASKS_DIR, LOG_PATH, CLIENT
 
 VALID_SOURCES = {"gmail", "whatsapp", "internal", "client-report", "ads-platform", "manual"}
 VALID_LOOPS = {
-    "command-chase", "grow-edge-sessions", "ad-intel", "meta-ads",
+    "command-chase", "ad-intel", "meta-ads",
     "content-engine", "social-calendar", "creative-brief", "lead-qualify",
     "manual",
 }

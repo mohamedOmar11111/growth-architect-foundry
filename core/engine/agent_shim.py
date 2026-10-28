@@ -66,7 +66,7 @@ from tenant import TenantContext, TenantConfigError
 from paths import WORKSPACE as HQ_ROOT, CLIENTS_ROOT, LOG_PATH, DOMAIN_CONTRACTS, DOMAIN_WORKSPACE  # noqa: E402
 
 VALID_LOOPS = {
-    "command-chase", "grow-edge-sessions", "ad-intel", "content-engine", "lead-qualify",
+    "command-chase", "ad-intel", "content-engine", "lead-qualify",
 }
 
 # Override any of these with the matching env var if the hardcoded default
