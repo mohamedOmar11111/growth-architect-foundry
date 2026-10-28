@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+- **New:** `scripts/build_claude_web_pack.py` builds a claude.ai plugin zip and a standalone skill zip with the
+  engine bundled inside the skill (stdlib only, offline). Checked by running the engine from the extracted zip, and
+  the plugin upload plus a first run were confirmed working in claude.ai by the author.
+
 ## 1.5.0 - 2026-10-28
 - **Fix:** `campaigns import` now reads real export shapes: title lines above the header, `Amount spent (USD)`-style
   headers, `--` cells, `Total:` rows, UTF-16/tab and `;` files, Arabic column names and digits, ad-set-level rows
