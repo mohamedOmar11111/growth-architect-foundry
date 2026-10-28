@@ -59,7 +59,7 @@ def _human_approved(target: str) -> bool:
               file=sys.stderr)
         return False
     try:
-        typed = input(f"   Type the campaign key '{target}' to apply this change: ").strip()
+        typed = input(f"   Type exactly '{target}' (not 'yes') to apply this change: ").strip()
     except EOFError:
         return False
     if typed != target:

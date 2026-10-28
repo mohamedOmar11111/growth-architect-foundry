@@ -1,6 +1,9 @@
 # Changelog
 
 ## Unreleased
+- **Verified:** the Meta budget write path on a real ad account (paused, zero-spend campaign): wrong approval refused,
+  correct key applied and read back, revert applied, 50% change blocked by the cap. `live pause` and Google writes
+  are still untested on a real account. The approval prompt now says to type the exact key, not "yes".
 - **New:** `scripts/build_claude_web_pack.py` builds a claude.ai plugin zip and a standalone skill zip with the
   engine bundled inside the skill (stdlib only, offline). Checked by running the engine from the extracted zip, and
   the plugin upload plus a first run were confirmed working in claude.ai by the author.
