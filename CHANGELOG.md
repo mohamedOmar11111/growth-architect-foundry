@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.5.0 - 2026-10-28
 - **Fix:** `campaigns import` now reads real export shapes: title lines above the header, `Amount spent (USD)`-style
   headers, `--` cells, `Total:` rows, UTF-16/tab and `;` files, Arabic column names and digits, ad-set-level rows
   (summed per campaign). Unrecognised spend/impressions/clicks/conversions columns now warn in the report instead of a
