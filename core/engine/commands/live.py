@@ -31,7 +31,8 @@ from typing import Any
 from tenant import TenantContext, TenantConfigError
 from utils import append_log, sanitize_text
 
-GRAPH_API_VERSION = "v21.0"
+GRAPH_API_VERSION = "v25.0"  # v21.0 expires 2027-01-21; v25.0 is supported to 2028-07-29
+MAX_META_PAGES = 50  # 50 pages x 200 rows; beyond this we refuse rather than report partial data
 MAX_BUDGET_CHANGE_PCT = 0.20  # rule 3: respect learning
 EXIT_REFUSED = 3  # a safety gate refused the action (distinct from failure=1, bad input=2)
 BUDGET_WINDOW_DAYS = 7
@@ -240,16 +241,32 @@ def _meta_get(url: str, params: dict) -> dict:
             f"Meta Ads API call failed: {_safe_error(exc, params.get('access_token', ''))}") from exc
 
 
+def _meta_get_all(url: str, params: dict) -> list[dict]:
+    """All rows of a Graph list endpoint, following cursors. Fails closed: if the account has more
+    than MAX_META_PAGES pages, raise instead of silently under-reporting spend."""
+    rows: list[dict] = []
+    page_params = dict(params)
+    for _ in range(MAX_META_PAGES):
+        page = _meta_get(url, page_params)
+        rows.extend(page.get("data", []))
+        paging = page.get("paging") or {}
+        after = (paging.get("cursors") or {}).get("after")
+        if not paging.get("next") or not after:
+            return rows
+        page_params = {**params, "after": after}
+    raise LiveFetchError(f"Meta returned more than {MAX_META_PAGES} pages; refusing to report partial data.")
+
+
 def _meta_fetch_campaigns(tenant: TenantContext) -> dict[str, dict]:
     """Pull live Meta campaigns + 7d insights. Raises LiveFetchError on failure."""
     access_token, ad_account_id = tenant.require(*META_KEYS)
     base = f"https://graph.facebook.com/{GRAPH_API_VERSION}/act_{ad_account_id}"
-    data = _meta_get(f"{base}/campaigns", {
+    campaign_rows = _meta_get_all(f"{base}/campaigns", {
         "fields": "id,name,status,daily_budget,lifetime_budget",
-        "access_token": access_token, "limit": 200})  # ponytail: no pagination past 200
+        "access_token": access_token, "limit": 200})
 
     campaigns: dict[str, dict] = {}
-    for row in data.get("data", []):
+    for row in campaign_rows:
         budget_cents = row.get("daily_budget") or row.get("lifetime_budget") or "0"
         campaigns[row["id"]] = {
             "id": row["id"], "name": sanitize_text(row["name"]), "status": row["status"],
@@ -258,7 +275,7 @@ def _meta_fetch_campaigns(tenant: TenantContext) -> dict[str, dict]:
         }
 
     today = datetime.date.today()
-    insights = _meta_get(f"{base}/insights", {
+    insight_rows = _meta_get_all(f"{base}/insights", {
         "level": "campaign",
         "fields": "campaign_id,impressions,clicks,spend,actions",
         "time_range": json.dumps({"since": (today - datetime.timedelta(days=7)).isoformat(),
@@ -266,7 +283,7 @@ def _meta_fetch_campaigns(tenant: TenantContext) -> dict[str, dict]:
         "time_increment": 1, "access_token": access_token, "limit": 500})
 
     from loops.meta_ads import count_conversions
-    for row in insights.get("data", []):
+    for row in insight_rows:
         c = campaigns.get(row["campaign_id"])
         if c is None:
             continue
