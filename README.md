@@ -57,13 +57,15 @@ client data):
 ```
 /foundry:doctor              # checks Python + dependencies, prints the fix commands
 /foundry:init Acme_Store     # scaffolds 02_Active_Clients/Acme_Store/
+/foundry:import Acme_Store C:\path\to\export.csv   # no ad-account login: import, then audit
 /foundry:audit Acme_Store    # 0-100 health score, top fixes, 30-day plan
+/foundry:report Acme_Store ar # client-ready readout (ar or en)
 ```
 
 Requirements: Python 3.10+ and `pip install -r requirements.txt` (Google Ads SDK
 is optional). Or just talk to Claude: "audit my account" / "راجع حسابي".
 
-Slash commands: `/foundry:init`, `doctor`, `audit`, `diagnose`, `report`, `live`.
+Slash commands: `/foundry:init`, `import`, `doctor`, `audit`, `diagnose`, `report`, `live`.
 
 <p align="center">
   <img src="./assets/readme/foundry-engine-vs-workspace.svg" width="100%"
