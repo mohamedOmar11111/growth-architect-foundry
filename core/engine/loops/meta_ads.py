@@ -25,7 +25,8 @@ from utils import append_log, refresh_graph
 from signals import write_signal, read_signals
 from precedent import find_duplicate
 
-GRAPH_API_VERSION = "v21.0"
+GRAPH_API_VERSION = "v25.0"  # v21.0 expires 2027-01-21; v25.0 is supported to 2028-07-29
+MAX_PAGES = 50
 BUDGET_BURN_THRESHOLD = 0.70
 CONTENT_OPPORTUNITY_CTR = 3.0  # Meta's organic CTR baseline runs lower than Google Search's
 CONTENT_OPPORTUNITY_MIN_CLICKS = 20
@@ -61,6 +62,23 @@ def count_conversions(actions: list[dict]) -> float:
     return sum(best.values())
 
 
+def _get_all(url: str, params: dict) -> list[dict]:
+    """All rows of a Graph list endpoint, following cursors; raises rather than return partial data."""
+    rows: list[dict] = []
+    page_params = dict(params)
+    for _ in range(MAX_PAGES):
+        response = requests.get(url, params=page_params, timeout=30)
+        response.raise_for_status()
+        page = response.json()
+        rows.extend(page.get("data", []))
+        paging = page.get("paging") or {}
+        after = (paging.get("cursors") or {}).get("after")
+        if not paging.get("next") or not after:
+            return rows
+        page_params = {**params, "after": after}
+    raise RuntimeError(f"Meta returned more than {MAX_PAGES} pages; refusing to report partial data.")
+
+
 def _fetch_campaigns(access_token: str, ad_account_id: str) -> dict[str, dict]:
     """All campaigns with delivery status + budget, regardless of spend."""
     url = f"https://graph.facebook.com/{GRAPH_API_VERSION}/act_{ad_account_id}/campaigns"
@@ -69,11 +87,8 @@ def _fetch_campaigns(access_token: str, ad_account_id: str) -> dict[str, dict]:
         "access_token": access_token,
         "limit": 200,
     }
-    response = requests.get(url, params=params, timeout=30)
-    response.raise_for_status()
-    data = response.json()
     attrs: dict[str, dict] = {}
-    for row in data.get("data", []):
+    for row in _get_all(url, params):
         budget_micros = row.get("daily_budget") or row.get("lifetime_budget") or "0"
         attrs[row["id"]] = {
             "name": row["name"],
@@ -100,11 +115,8 @@ def _fetch_insights(access_token: str, ad_account_id: str) -> list[dict]:
         "access_token": access_token,
         "limit": 500,
     }
-    response = requests.get(url, params=params, timeout=30)
-    response.raise_for_status()
-    data = response.json()
     rows: list[dict] = []
-    for row in data.get("data", []):
+    for row in _get_all(url, params):
         conversions = count_conversions(row.get("actions", []))
         rows.append({
             "campaign_id": row["campaign_id"],

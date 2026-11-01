@@ -1,17 +1,45 @@
-# The Foundry
-### The multi-agent growth kernel for agencies — now a Claude Code plugin
+﻿# Foundry
+### Drop in your Ads Manager export. Get an audit and a client report, in Arabic or English.
 
+Free and open source (MIT). For agencies and media buyers who run other people's ad money.
 **Website:** https://mohamedomar11111.github.io/growth-architect-foundry/ (English and Arabic)
 
 [![Kernel-Guard](https://github.com/mohamedOmar11111/growth-architect-foundry/actions/workflows/kernel-guard.yml/badge.svg)](https://github.com/mohamedOmar11111/growth-architect-foundry/actions/workflows/kernel-guard.yml)
 [![Code-Quality-Guard](https://github.com/mohamedOmar11111/growth-architect-foundry/actions/workflows/pylint.yml/badge.svg)](https://github.com/mohamedOmar11111/growth-architect-foundry/actions/workflows/pylint.yml)
 
-[![Architecture diagram of mohamedomar11111/growth-architect-foundry](https://gitdiagram.com/mohamedomar11111/growth-architect-foundry/diagram.png)](https://gitdiagram.com/mohamedomar11111/growth-architect-foundry?utm_source=readme&utm_medium=picture)
+<p align="center">
+  <img src="./docs/img/pain1.jpg" width="320" alt="Your client report shouldn't eat your Friday. Foundry writes it in English and Arabic, WhatsApp-ready.">
+</p>
 
-Every client you take on means rebuilding the same ops stack. The Foundry is
-that stack, already built — plug in a client, plug in whichever AI tool you
-already pay for, go. **31 deterministic commands**, multi-tenant isolation,
-maker/checker safety, Arabic-first output.
+## Try it in 10 minutes, no ad-account login
+
+1. Export your campaigns from Meta Ads Manager or Google Ads as CSV (any language, any currency).
+2. Run three commands (Python 3.10+, standard library only for this path):
+
+```
+python foundry.py setup init --client Example
+python foundry.py campaigns import --client Example --file export.csv
+python foundry.py account audit --client Example
+python foundry.py account report --client Example --lang ar     # or --lang en
+```
+
+You get: a 0-100 health score, one call per campaign (Scale, Keep, Too early, Cut, Stop) with the number
+behind it, the biggest waste, and a client-ready readout plus a short WhatsApp version. A campaign with
+fewer than 10 results is marked "Too early" instead of guessed. Missing columns produce a warning, never a
+silent zero.
+
+See the real output on a made-up export in [examples/](examples/): the audit, the Arabic client report and both WhatsApp versions.
+
+**What is proven and what is not (read this before you trust it):**
+
+| Proven | Not yet proven |
+|---|---|
+| CSV audit on a real Meta ad-set export, plus 160+ automated tests on Windows, Linux and macOS | Google Ads CSV exports and Arabic-language Ads Manager exports on a real account |
+| One live Meta budget change on a real account: wrong key refused, right key applied, 50% jump blocked | `live pause` and every Google Ads write on a real account |
+| Read-only Meta pull | Anyone outside this project using it. If you try it, tell me what broke: open an issue |
+
+Foundry never touches a live account unless a person types the campaign key at a real terminal (see
+[Live ad-account safety](#live-ad-account-safety) below).
 
 ---
 
@@ -29,13 +57,15 @@ client data):
 ```
 /foundry:doctor              # checks Python + dependencies, prints the fix commands
 /foundry:init Acme_Store     # scaffolds 02_Active_Clients/Acme_Store/
+/foundry:import Acme_Store C:\path\to\export.csv   # no ad-account login: import, then audit
 /foundry:audit Acme_Store    # 0-100 health score, top fixes, 30-day plan
+/foundry:report Acme_Store ar # client-ready readout (ar or en)
 ```
 
 Requirements: Python 3.10+ and `pip install -r requirements.txt` (Google Ads SDK
 is optional). Or just talk to Claude: "audit my account" / "راجع حسابي".
 
-Slash commands: `/foundry:init`, `doctor`, `audit`, `diagnose`, `report`, `live`.
+Slash commands: `/foundry:init`, `import`, `doctor`, `audit`, `diagnose`, `report`, `live`.
 
 <p align="center">
   <img src="./assets/readme/foundry-engine-vs-workspace.svg" width="100%"
@@ -179,7 +209,11 @@ Never auto-approve `live pause` or `live budget`.
 
 ---
 
-## Loops (scheduled automation)
+## Loops (scripts you schedule yourself)
+
+Foundry does not run anything in the background on its own. These are scripts in `core/engine/loops/`
+that you can put on a schedule (cron, Task Scheduler) with `run_loop.py`. They have less test coverage than
+the audit and report commands, so treat them as working drafts and review what they produce.
 
 - **ad-intel** — Google Ads monitoring, budget-burn alerts, content-opportunity signals
 - **meta-ads** — same pattern for Meta (Facebook/Instagram) Ads
@@ -192,9 +226,9 @@ Never auto-approve `live pause` or `live budget`.
 
 ## Agents & Skills
 
-- **`01_Context_Vault/Agents/`** — 61 agent definitions across marketing, engineering, design, product, testing, and support. Full social media squad: Twitter/X, LinkedIn, Instagram, TikTok, Reddit.
-- **`01_Context_Vault/Skills/diagram-design/`** — 40 HTML/SVG diagram types.
-- **`01_Context_Vault/Protocols/*/SKILL.md`** — operating procedures, not just personas.
+- **`01_Context_Vault/Agents/`** — the persona files the content loops read: five social platform
+  strategists (Twitter/X, LinkedIn, Instagram, TikTok, Reddit) and an image-prompt engineer. Nothing else in
+  the engine reads this folder.
 
 ---
 
@@ -210,7 +244,7 @@ credentials, strategy, and history live in their own isolated folder — no
 risk of one client's data leaking into another's run.
 
 - **Engine** (`core/engine/`) — Python state machine: signals, tasks, loops, commands, tenant isolation
-- **Context Vault** (`01_Context_Vault/`) — agents, skills, protocols, methodology
+- **Context Vault** (`01_Context_Vault/`) — six persona files the content loops read
 - **Clients** (`02_Active_Clients/`) — per-tenant folders with .env, STRATEGY.md, signals, reports
 - **Foundry CLI** (`foundry.py`) — unified entry point for all 31 commands
 
@@ -223,7 +257,7 @@ from `calc.py` with assumptions printed alongside every number.
 ## Principles
 
 - **No Magic:** Marketing is engineering.
-- **No Slop:** Anti-AI writing protocols enforced.
+- **No Slop:** numbers come from code, with assumptions printed beside them.
 - **No Waste:** Management by exception only.
 - **No Auto-Publish:** Maker/checker built into every task contract.
 

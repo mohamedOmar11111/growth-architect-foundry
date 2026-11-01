@@ -99,6 +99,21 @@ def build_actions(perf: dict[str, Any], lang: str = "en") -> dict[str, list[str]
     return {"today": today, "test": test or [t["test_none"]], "stop": stop or [t["stop_none"]]}
 
 
+def ar_conversions_phrase(n: float) -> str:
+    """Arabic number agreement for 'achieved N conversions': 1 -> one, 2 -> dual, 3-10 -> plural,
+    11+ -> singular accusative (tamyiz)."""
+    count = round(n)
+    if count == 0:
+        return "ولم نحقق أي تحويل"
+    if count == 1:
+        return "وحققنا تحويلًا واحدًا"
+    if count == 2:
+        return "وحققنا تحويلين"
+    if count <= 10:
+        return f"وحققنا {count:,} تحويلات"
+    return f"وحققنا {count:,} تحويلًا"
+
+
 def _score_line(perf: dict[str, Any], lang: str) -> str:
     score = perf["score"]
     if score is None:
@@ -157,7 +172,7 @@ def format_report(tenant: str, date: str, perf: dict[str, Any], currency: str | 
     if lang == "ar":
         lines = [f"# {tenant} - تقرير الأداء - {date}", "", *_period_line(perf, "ar"),
                  f"**الخلاصة:** الدرجة {_score_line(perf, 'ar')}. أُنفق {_money(totals['cost'], currency)} "
-                 f"وحققنا {totals['conversions']:,.0f} تحويلات (CPA {cpa}).", "",
+                 f"{ar_conversions_phrase(totals['conversions'])} (CPA {cpa}).", "",
                  "## الأرقام", "| المؤشر | القيمة |", "|---|---|",
                  f"| الإنفاق | {_money(totals['cost'], currency)} |", f"| التحويلات | {totals['conversions']:,.0f} |",
                  f"| CPA | {cpa} |", f"| CTR | {_ctr(perf)} |", f"| مرات الظهور | {totals['impressions']:,.0f} |", "",
