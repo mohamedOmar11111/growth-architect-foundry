@@ -1,4 +1,4 @@
-# Foundry
+﻿# Foundry
 ### Drop in your Ads Manager export. Get an audit and a client report, in Arabic or English.
 
 Free and open source (MIT). For agencies and media buyers who run other people's ad money.
@@ -28,8 +28,7 @@ behind it, the biggest waste, and a client-ready readout plus a short WhatsApp v
 fewer than 10 results is marked "Too early" instead of guessed. Missing columns produce a warning, never a
 silent zero.
 
-Here is what that looks like, on made-up numbers: score 70/100 (grade C), Campaign A scale, Campaign B too
-early (6 results), Campaign C stop. See the example on the [website](https://mohamedomar11111.github.io/growth-architect-foundry/#example).
+See the real output on a made-up export in [examples/](examples/): the audit, the Arabic client report and both WhatsApp versions.
 
 **What is proven and what is not (read this before you trust it):**
 
