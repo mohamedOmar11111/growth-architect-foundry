@@ -70,12 +70,13 @@ def test_season_active_and_prep_window(monkeypatch, tmp_path, capsys):
     assert list(t.reports_dir.glob("*-season-plan.md"))
 
 
-@pytest.mark.xfail(strict=True, reason="BUG: season.py labels an ACTIVE season 'Date: ... (today)' even when it started days ago")
 def test_season_active_label_is_not_always_today(monkeypatch, tmp_path, capsys):
     t = make_tenant(monkeypatch, tmp_path)
     freeze(monkeypatch, datetime.datetime(2026, 11, 29, 9, 0))   # White Friday started 2026-11-27
     season.run(t)
-    assert "Date: 2026-11-27 (today)" not in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "Date: 2026-11-27 (started 2 days ago)" in out
+    assert "(today)" not in out
 
 
 def test_season_calendar_exhausted(monkeypatch, tmp_path, capsys):

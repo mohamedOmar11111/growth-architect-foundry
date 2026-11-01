@@ -56,7 +56,9 @@ def run(tenant: TenantContext, opts: dict | None = None) -> int:
     if active:
         lines += ["## 🔴 ACTIVE NOW", ""]
         for name, start, lead, advice in active:
-            lines += [f"### {name}", f"Date: {start} (today)", advice, ""]
+            age = (today - start).days
+            when = "today" if age == 0 else f"started {age} day{'s' if age != 1 else ''} ago"
+            lines += [f"### {name}", f"Date: {start} ({when})", advice, ""]
 
     if upcoming:
         lines += ["## Upcoming Seasons", ""]
